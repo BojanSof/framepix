@@ -1,0 +1,11 @@
+.pytest_cache/
+__pycache__/
+.cache/
+log/
+
+**/build
+**/sdkconfig.old
+**/dependencies.lock
+
+managed_components
+.vscode/
