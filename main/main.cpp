@@ -8,6 +8,7 @@
 #include <nvs_flash.h>
 
 #include "HttpServer.hpp"
+#include "WifiConfig.hpp"
 #include "WifiManager.hpp"
 
 #include "esp_err.h"
@@ -37,8 +38,8 @@ extern "C" void app_main()
 
     /* Initialize WiFi */
     using namespace EspWifiManager;
-    WifiManager manager{ std::make_unique<WifiConfigAP>(
-        "ESP_CXX", "12345678") };
+
+    WifiManager<WifiConfigAP> manager(WifiConfigAP{ "ESP_CXX", "12345678" });
 
     using namespace EspHttpServer;
     HttpServer httpServer;
