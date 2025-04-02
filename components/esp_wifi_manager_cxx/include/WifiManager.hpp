@@ -1,5 +1,7 @@
-#ifndef _ESP_WIFI_MANAGER_CXX
-#define _ESP_WIFI_MANAGER_CXX
+#ifndef _ESP_WIFI_MANAGER_CXX_WIFI_MANAGER_HPP
+#define _ESP_WIFI_MANAGER_CXX_WIFI_MANAGER_HPP
+
+#include "WifiConfig.hpp"
 
 #include <esp_log.h>
 #include <esp_netif.h>
@@ -24,6 +26,7 @@ public:
         setupNetif();
         config_.apply();
         ESP_ERROR_CHECK(esp_wifi_start());
+        config_.run();
     }
 
     ~WifiManager()
@@ -62,20 +65,21 @@ private:
     {
         ESP_LOGI(TAG, "Setting up network interface...");
 
-        wifi_mode_t mode;
-        ESP_ERROR_CHECK(esp_wifi_get_mode(&mode));
-
-        if (mode == WIFI_MODE_AP)
+        if constexpr (std::is_same_v<ConfigT, WifiConfigAP>)
         {
             apNetif_ = esp_netif_create_default_wifi_ap();
         }
-        else if (mode == WIFI_MODE_STA)
+        else if constexpr (std::is_same_v<ConfigT, WifiConfigStation>)
         {
             staNetif_ = esp_netif_create_default_wifi_sta();
         }
-        else if (mode == WIFI_MODE_APSTA)
+        else if constexpr (std::is_same_v<ConfigT, WifiConfigAPandStation>)
         {
             apNetif_ = esp_netif_create_default_wifi_ap();
+            staNetif_ = esp_netif_create_default_wifi_sta();
+        }
+        else if constexpr (std::is_same_v<ConfigT, WifiConfigScanner>)
+        {
             staNetif_ = esp_netif_create_default_wifi_sta();
         }
     }
@@ -105,4 +109,4 @@ private:
 };
 }
 
-#endif  //_ESP_WIFI_MANAGER_CXX
+#endif  //_ESP_WIFI_MANAGER_CXX_WIFI_MANAGER_HPP

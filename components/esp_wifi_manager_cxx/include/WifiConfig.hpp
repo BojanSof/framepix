@@ -21,6 +21,8 @@ public:
     virtual void apply() = 0;
     virtual void disable() = 0;
 
+    virtual void run() { }
+
 protected:
     wifi_config_t config_{};
 };
@@ -179,8 +181,8 @@ protected:
     OnDeviceDisconnected onDeviceDisconnected_;
 
 private:
-    esp_event_handler_instance_t wifiEventHandlerInstance_;
-    esp_event_handler_instance_t ipEventHandlerInstance_;
+    esp_event_handler_instance_t wifiEventHandlerInstance_{};
+    esp_event_handler_instance_t ipEventHandlerInstance_{};
 };
 
 class WifiConfigStation : public virtual WifiConfig
@@ -293,8 +295,8 @@ protected:
     OnDisconnected onDisconnected_;
 
 private:
-    esp_event_handler_instance_t wifiEventHandlerInstance_;
-    esp_event_handler_instance_t ipEventHandlerInstance_;
+    esp_event_handler_instance_t wifiEventHandlerInstance_{};
+    esp_event_handler_instance_t ipEventHandlerInstance_{};
 };
 
 class WifiConfigAPandStation : public WifiConfigAP, public WifiConfigStation
@@ -378,10 +380,101 @@ public:
     }
 
 private:
-    esp_event_handler_instance_t apWifiEventHandlerInstance_;
-    esp_event_handler_instance_t apIpEventHandlerInstance_;
-    esp_event_handler_instance_t staWifiEventHandlerInstance_;
-    esp_event_handler_instance_t staIpEventHandlerInstance_;
+    esp_event_handler_instance_t apWifiEventHandlerInstance_{};
+    esp_event_handler_instance_t apIpEventHandlerInstance_{};
+    esp_event_handler_instance_t staWifiEventHandlerInstance_{};
+    esp_event_handler_instance_t staIpEventHandlerInstance_{};
+};
+
+class WifiConfigScanner : public WifiConfig
+{
+public:
+    struct WifiNetwork
+    {
+        std::string ssid;
+        int rssi;
+    };
+
+private:
+    inline static constexpr const char* TAG = "WifiConfigScanner";
+
+public:
+    using OnScanDone = std::function<void(const std::vector<WifiNetwork>&)>;
+
+    WifiConfigScanner(OnScanDone onScanDone)
+        : onScanDone_{ onScanDone }
+    {
+    }
+
+    virtual void apply() override
+    {
+        esp_event_handler_instance_register(
+            WIFI_EVENT,
+            WIFI_EVENT_SCAN_DONE,
+            &scanDoneHandler,
+            this,
+            &scanDoneHandlerInstance_);
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &config_));
+    }
+
+    virtual void disable() override
+    {
+        esp_event_handler_instance_unregister(
+            WIFI_EVENT, WIFI_EVENT_SCAN_DONE, &scanDoneHandlerInstance_);
+    }
+
+    virtual void run() override
+    {
+        ESP_ERROR_CHECK(esp_wifi_scan_start(nullptr, false));
+    }
+
+private:
+    static void scanDoneHandler(
+        void* arg,
+        esp_event_base_t event_base,
+        int32_t event_id,
+        void* event_data)
+    {
+        WifiConfigScanner* config = static_cast<WifiConfigScanner*>(arg);
+        xTaskCreate(
+            &processScanResults,
+            "ScanResultsTask",
+            4096,
+            config,
+            tskIDLE_PRIORITY + 1,
+            &config->processScanResultsHandle_);
+    }
+
+    static void processScanResults(void* arg)
+    {
+        WifiConfigScanner* config = static_cast<WifiConfigScanner*>(arg);
+        uint16_t numNetworks = 10;
+        wifi_ap_record_t apRecords[10];
+        ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&numNetworks, apRecords));
+
+        std::vector<WifiNetwork> scanResults;
+        for (int i = 0; i < numNetworks; i++)
+        {
+            scanResults.push_back(
+                { std::string(reinterpret_cast<char*>(apRecords[i].ssid)),
+                  apRecords[i].rssi });
+        }
+
+        ESP_LOGI(
+            TAG, "WiFi scan completed with %d networks found.", numNetworks);
+
+        if (config->onScanDone_)
+        {
+            config->onScanDone_(scanResults);
+        }
+        vTaskDelete(nullptr);
+    }
+
+private:
+    OnScanDone onScanDone_;
+    esp_event_handler_instance_t scanDoneHandlerInstance_{};
+    TaskHandle_t processScanResultsHandle_ = nullptr;
 };
 }
 #endif  //_ESP_WIFI_MANAGER_CXX_WIFI_CONFIG_HPP
