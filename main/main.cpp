@@ -11,8 +11,6 @@
 #include "WifiConfig.hpp"
 #include "WifiManager.hpp"
 
-#include "esp_err.h"
-
 #define TAG "framepix"
 
 extern "C" void app_main()
@@ -39,23 +37,32 @@ extern "C" void app_main()
     /* Initialize WiFi */
     using namespace EspWifiManager;
 
-    WifiManager<WifiConfigAP> manager(WifiConfigAP{ "ESP_CXX", "12345678" });
-
-    using namespace EspHttpServer;
-    HttpServer httpServer;
-    HttpUri uri(
-        "/",
-        HTTP_GET,
-        [](HttpRequest req) -> HttpResponse
+    WifiManager manager{ std::make_unique<WifiConfigScanner>(WifiConfigScanner{
+        [](const auto& networks)
         {
-            HttpResponse resp{ req };
-            resp.setBody("Dummy response!", "text/plain");
-            return resp;
-        });
-    ESP_ERROR_CHECK(httpServer.start());
-    ESP_ERROR_CHECK(httpServer.registerUri(uri));
-
-    ESP_LOGI(TAG, "HTTP server started and register / URI");
+            for (const auto& network: networks)
+                ESP_LOGI(
+                    TAG, "Found network with SSID: %s", network.ssid.c_str());
+        } }) };
+    /*WifiManager manager{std::make_unique<WifiConfigAP>(WifiConfigAP{
+     * "ESP_CXX", "12345678"
+     * })};*/
+    /**/
+    /*using namespace EspHttpServer;*/
+    /*HttpServer httpServer;*/
+    /*HttpUri uri(*/
+    /*    "/",*/
+    /*    HTTP_GET,*/
+    /*    [](HttpRequest req) -> HttpResponse*/
+    /*    {*/
+    /*        HttpResponse resp{ req };*/
+    /*        resp.setBody("Dummy response!", "text/plain");*/
+    /*        return resp;*/
+    /*    });*/
+    /*ESP_ERROR_CHECK(httpServer.start());*/
+    /*ESP_ERROR_CHECK(httpServer.registerUri(uri));*/
+    /**/
+    /*ESP_LOGI(TAG, "HTTP server started and register / URI");*/
 
     while (1)
     {

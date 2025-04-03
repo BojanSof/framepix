@@ -1,7 +1,6 @@
 #ifndef _ESP_WIFI_MANAGER_CXX_WIFI_CONFIG_HPP
 #define _ESP_WIFI_MANAGER_CXX_WIFI_CONFIG_HPP
 
-#include "esp_wifi_types_generic.h"
 #include <esp_log.h>
 #include <esp_mac.h>
 #include <esp_wifi.h>
@@ -13,18 +12,35 @@
 
 namespace EspWifiManager
 {
+
+enum class WifiMode
+{
+    Null,
+    AP,
+    Station,
+    APandStation,
+    Scanner
+};
+
 class WifiConfig
 {
 public:
-    WifiConfig() = default;
+    WifiConfig(const WifiMode& mode)
+        : mode_{ mode }
+    {
+    }
+
     virtual ~WifiConfig() = default;
     virtual void apply() = 0;
     virtual void disable() = 0;
+
+    WifiMode getMode() const { return mode_; }
 
     virtual void run() { }
 
 protected:
     wifi_config_t config_{};
+    WifiMode mode_{ WifiMode::Null };
 };
 
 class WifiConfigAP : public virtual WifiConfig
@@ -45,7 +61,8 @@ public:
         OnDeviceDisconnected onDeviceDisconnected = nullptr,
         const uint8_t channel = 1,
         const uint8_t numConnections = 1)
-        : onDeviceConnected_{ onDeviceConnected }
+        : WifiConfig(WifiMode::AP)
+        , onDeviceConnected_{ onDeviceConnected }
         , onDeviceDisconnected_{ onDeviceDisconnected }
     {
         const size_t userSsidLen = strlen(ssid);
@@ -200,7 +217,8 @@ public:
         const char* pass,
         OnConnected onConnected = nullptr,
         OnDisconnected onDisconnected = nullptr)
-        : onConnected_{ onConnected }
+        : WifiConfig(WifiMode::Station)
+        , onConnected_{ onConnected }
         , onDisconnected_{ onDisconnected }
     {
         const size_t userSsidLen = strlen(ssid);
@@ -317,7 +335,8 @@ public:
         OnDisconnected onStaDisconnected = nullptr,
         const uint8_t apChannel = 1,
         const uint8_t numConnections = 1)
-        : WifiConfigAP(
+        : WifiConfig(WifiMode::APandStation)
+        , WifiConfigAP(
               apSsid,
               apPass,
               onAPDeviceConnected,
@@ -402,7 +421,8 @@ public:
     using OnScanDone = std::function<void(const std::vector<WifiNetwork>&)>;
 
     WifiConfigScanner(OnScanDone onScanDone)
-        : onScanDone_{ onScanDone }
+        : WifiConfig(WifiMode::Scanner)
+        , onScanDone_{ onScanDone }
     {
     }
 
