@@ -37,21 +37,24 @@ WifiManager::~WifiManager()
 
 void WifiManager::setConfig(std::unique_ptr<WifiConfig> config)
 {
-    if (config == nullptr)
-    {
-        return;
-    }
     if (config_)
     {
         config_->disable();
         ESP_ERROR_CHECK(esp_wifi_stop());
         cleanupNetif();
     }
-    config_ = std::move(config);
-    setupNetif();
-    config_->apply();
-    ESP_ERROR_CHECK(esp_wifi_start());
-    config_->run();
+    if (config)
+    {
+        config_ = std::move(config);
+        setupNetif();
+        config_->apply();
+        ESP_ERROR_CHECK(esp_wifi_start());
+        config_->run();
+    }
+    else
+    {
+        config_ = nullptr;
+    }
 }
 
 WifiMode WifiManager::getMode() const

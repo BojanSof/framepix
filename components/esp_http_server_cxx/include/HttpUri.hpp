@@ -30,6 +30,27 @@ public:
     {
     }
 
+    HttpUri(HttpUri&& other) noexcept
+        : handler_{ std::move(other.handler_) }
+        , uri_{ other.uri_ }
+    {
+        uri_.user_ctx = this;
+    }
+
+    HttpUri& operator=(HttpUri&& other) noexcept
+    {
+        if (this != &other)
+        {
+            handler_ = std::move(other.handler_);
+            uri_ = other.uri_;
+            uri_.user_ctx = this;
+        }
+        return *this;
+    }
+
+    HttpUri(const HttpUri&) = delete;
+    HttpUri& operator=(const HttpUri&) = delete;
+
     httpd_uri_t& getNativeHandle() { return uri_; }
 
 private:

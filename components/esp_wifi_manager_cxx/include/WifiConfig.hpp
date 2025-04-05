@@ -9,6 +9,7 @@
 #include <format>
 #include <functional>
 #include <string>
+#include <string_view>
 
 namespace EspWifiManager
 {
@@ -55,8 +56,8 @@ public:
 
 public:
     WifiConfigAP(
-        const char* ssid,
-        const char* pass,
+        std::string_view ssid,
+        std::string_view pass,
         OnDeviceConnected onDeviceConnected = nullptr,
         OnDeviceDisconnected onDeviceDisconnected = nullptr,
         const uint8_t channel = 1,
@@ -65,27 +66,22 @@ public:
         , onDeviceConnected_{ onDeviceConnected }
         , onDeviceDisconnected_{ onDeviceDisconnected }
     {
-        const size_t userSsidLen = strlen(ssid);
+        const size_t userSsidLen = ssid.size();
         const size_t maxSsidLen
             = sizeof(config_.ap.ssid) / sizeof(config_.ap.ssid[0]);
         const size_t ssidLen
             = (userSsidLen < maxSsidLen) ? userSsidLen : maxSsidLen;
-        strncpy(
-            reinterpret_cast<char*>(config_.ap.ssid),
-            reinterpret_cast<const char*>(ssid),
-            ssidLen);
+        strncpy(reinterpret_cast<char*>(config_.ap.ssid), ssid.data(), ssidLen);
 
         config_.ap.ssid_len = ssidLen;
 
-        const size_t userPassLen = strlen(pass);
+        const size_t userPassLen = pass.size();
         const size_t maxPassLen
             = sizeof(config_.ap.password) / sizeof(config_.ap.password[0]);
         const size_t passLen
             = (userPassLen < maxPassLen) ? userPassLen : maxPassLen;
         strncpy(
-            reinterpret_cast<char*>(config_.ap.password),
-            reinterpret_cast<const char*>(pass),
-            passLen);
+            reinterpret_cast<char*>(config_.ap.password), pass.data(), passLen);
 
         config_.ap.channel = channel;
 
@@ -213,25 +209,29 @@ public:
 
 public:
     WifiConfigStation(
-        const char* ssid,
-        const char* pass,
+        std::string_view ssid,
+        std::string_view pass,
         OnConnected onConnected = nullptr,
         OnDisconnected onDisconnected = nullptr)
         : WifiConfig(WifiMode::Station)
         , onConnected_{ onConnected }
         , onDisconnected_{ onDisconnected }
     {
-        const size_t userSsidLen = strlen(ssid);
+        const size_t userSsidLen = ssid.size();
         const size_t maxSsidLen = sizeof(config_.sta.ssid);
         const size_t ssidLen
             = (userSsidLen < maxSsidLen) ? userSsidLen : maxSsidLen;
-        strncpy(reinterpret_cast<char*>(config_.sta.ssid), ssid, ssidLen);
+        strncpy(
+            reinterpret_cast<char*>(config_.sta.ssid), ssid.data(), ssidLen);
 
-        const size_t userPassLen = strlen(pass);
+        const size_t userPassLen = pass.size();
         const size_t maxPassLen = sizeof(config_.sta.password);
         const size_t passLen
             = (userPassLen < maxPassLen) ? userPassLen : maxPassLen;
-        strncpy(reinterpret_cast<char*>(config_.sta.password), pass, passLen);
+        strncpy(
+            reinterpret_cast<char*>(config_.sta.password),
+            pass.data(),
+            passLen);
     }
 
     virtual void apply() override
@@ -325,10 +325,10 @@ private:
 public:
     // Constructor combines the parameters for both AP and STA.
     WifiConfigAPandStation(
-        const char* apSsid,
-        const char* apPass,
-        const char* staSsid,
-        const char* staPass,
+        std::string_view apSsid,
+        std::string_view apPass,
+        std::string_view staSsid,
+        std::string_view staPass,
         OnDeviceConnected onAPDeviceConnected = nullptr,
         OnDeviceDisconnected onAPDeviceDisconnected = nullptr,
         OnConnected onStaConnected = nullptr,

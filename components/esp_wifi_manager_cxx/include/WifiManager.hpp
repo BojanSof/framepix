@@ -16,7 +16,7 @@ private:
     inline static constexpr const char* TAG = "WifiManager";
 
 public:
-    explicit WifiManager(std::unique_ptr<WifiConfig> config);
+    explicit WifiManager(std::unique_ptr<WifiConfig> config = nullptr);
 
     ~WifiManager();
 

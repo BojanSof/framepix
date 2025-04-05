@@ -5,7 +5,6 @@
 
 #include <esp_http_server.h>
 
-#include <string>
 #include <string_view>
 
 namespace EspHttpServer
@@ -25,10 +24,9 @@ public:
         httpd_resp_set_hdr(req_, key, value);
     }
 
-    void
-    setBody(const std::string_view body, const std::string_view contentType)
+    void setContent(const std::string_view content, const char* contentType)
     {
-        content_ = body;
+        content_ = content;
         contentType_ = contentType;
     }
 
@@ -36,12 +34,12 @@ private:
     esp_err_t send()
     {
         esp_err_t err;
-        err = httpd_resp_set_type(req_, contentType_.c_str());
+        err = httpd_resp_set_type(req_, contentType_);
         if (err != ESP_OK)
         {
             return err;
         }
-        err = httpd_resp_send(req_, content_.c_str(), content_.size());
+        err = httpd_resp_send(req_, content_.data(), content_.size());
         return err;
     }
 
@@ -50,8 +48,8 @@ private:
 
 private:
     httpd_req_t* req_;
-    std::string content_;
-    std::string contentType_;
+    std::string_view content_;
+    const char* contentType_;
 };
 
 }  // namespace EspHttpServer

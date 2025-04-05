@@ -38,16 +38,29 @@ public:
         return std::string{ "" };
     }
 
-    std::string getBody()
+    std::string getContent()
     {
         if (req_->content_len > 0)
         {
-            std::string body(req_->content_len, ' ');
-            int received = httpd_req_recv(req_, body.data(), req_->content_len);
-            if (received > 0)
+            std::string content(req_->content_len, ' ');
+            int received = 0;
+            while (received < req_->content_len)
             {
-                return body;
+
+                int ret = httpd_req_recv(
+                    req_,
+                    content.data() + received,
+                    req_->content_len - received);
+                if (ret < 0)
+                {
+                    return std::string{ "" };
+                }
+                else
+                {
+                    received += ret;
+                }
             }
+            return content;
         }
         return std::string{ "" };
     }

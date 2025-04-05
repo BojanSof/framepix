@@ -8,8 +8,9 @@
 #include <nvs_flash.h>
 
 #include "HttpServer.hpp"
-#include "WifiConfig.hpp"
 #include "WifiManager.hpp"
+
+#include "WifiProvisioningWeb.hpp"
 
 #define TAG "framepix"
 
@@ -36,14 +37,12 @@ extern "C" void app_main()
 
     /* Initialize WiFi */
     using namespace EspWifiManager;
+    using namespace EspWifiProvisioningWeb;
 
-    WifiManager manager{ std::make_unique<WifiConfigScanner>(WifiConfigScanner{
-        [](const auto& networks)
-        {
-            for (const auto& network: networks)
-                ESP_LOGI(
-                    TAG, "Found network with SSID: %s", network.ssid.c_str());
-        } }) };
+    WifiManager manager{};
+    HttpServer httpServer{};
+    WifiProvisioningWeb provisioningWeb{ manager, httpServer };
+    provisioningWeb.start("FramePix", "12345678");
     /*WifiManager manager{std::make_unique<WifiConfigAP>(WifiConfigAP{
      * "ESP_CXX", "12345678"
      * })};*/
