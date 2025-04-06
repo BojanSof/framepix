@@ -6,6 +6,7 @@
 
 #include "freertos/task.h"
 
+#include <functional>
 #include <string_view>
 
 namespace EspWifiProvisioningWeb
@@ -15,14 +16,29 @@ using namespace EspHttpServer;
 
 class WifiProvisioningWeb
 {
+public:
+    enum class FailReason
+    {
+        APNotFound,
+        InvalidAPPassword
+    };
+
 private:
     inline static constexpr const char* TAG = "WifiProvisioningWeb";
+
+public:
+    using OnProvisioned = std::function<void()>;
+    using OnProvisionFailed = std::function<void(FailReason)>;
 
 public:
     WifiProvisioningWeb(WifiManager& wifiManager, HttpServer& httpServer);
     ~WifiProvisioningWeb();
 
-    void start(std::string_view apSsid, std::string_view apPass);
+    void start(
+        std::string_view apSsid,
+        std::string_view apPass,
+        OnProvisioned onProvisioned = nullptr,
+        OnProvisionFailed onProvisionFailed = nullptr);
     void stop();
 
 private:
@@ -37,8 +53,11 @@ private:
     WifiManager& wifiManager_;
     HttpServer& httpServer_;
     HttpUri wifiSignInPageUri_;
+    HttpUri wifiSignInPageCssUri_;
     HttpUri wifiConnectUri_;
     TaskHandle_t wifiConnectTaskHandle_{ nullptr };
+    OnProvisioned onProvisioned_{ nullptr };
+    OnProvisionFailed onProvisionFailed_{ nullptr };
 
     // for connecting to AP
     std::string_view apSsid_;

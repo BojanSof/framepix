@@ -1,12 +1,30 @@
 <!DOCTYPE html>
-<html>
-<head><title>WiFi Setup</title></head>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WiFi Setup</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <script>
+    function toggleTheme() {
+      document.body.classList.toggle('dark');
+    }
+  </script>
+</head>
 <body>
-  <h2>Enter WiFi Credentials</h2>
-  <form action="/connect" method="POST">
-    SSID: <input type="text" name="ssid"><br>
-    Password: <input type="password" name="password"><br>
-    <input type="submit" value="Connect">
-  </form>
+  <div class="container">
+    <header>
+      <h2>Enter WiFi Credentials</h2>
+      <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
+    </header>
+    <form action="/connect" method="POST" class="wifi-form">
+      <label for="ssid">SSID:</label>
+      <input type="text" id="ssid" name="ssid" required>
+      <label for="password">Password:</label>
+      <input type="password" id="password" name="password" required>
+      <input type="submit" value="Connect" class="btn-blue">
+    </form>
+  </div>
 </body>
 </html>
+

@@ -12,6 +12,9 @@ extern const uint8_t
     wifi_login_html_start[] asm("_binary_wifi_login_html_start");
 extern const uint8_t wifi_login_html_end[] asm("_binary_wifi_login_html_end");
 
+extern const uint8_t css_styles_css_start[] asm("_binary_styles_css_start");
+extern const uint8_t css_styles_css_end[] asm("_binary_styles_css_end");
+
 WifiProvisioningWeb::WifiProvisioningWeb(
     WifiManager& wifiManager, HttpServer& httpServer)
     : wifiManager_{ wifiManager }
@@ -32,6 +35,22 @@ WifiProvisioningWeb::WifiProvisioningWeb(
                                   "text/html");
                               return response;
                           } }
+    , wifiSignInPageCssUri_{ "/css/styles.css",
+                             HTTP_GET,
+                             [](HttpRequest req) -> HttpResponse
+                             {
+                                 HttpResponse response(req);
+                                 response.setStatus("200 OK");
+                                 size_t css_size = css_styles_css_end
+                                     - css_styles_css_start;
+                                 response.setContent(
+                                     std::string_view{
+                                         reinterpret_cast<const char*>(
+                                             css_styles_css_start),
+                                         css_size },
+                                     "text/css");
+                                 return response;
+                             } }
     , wifiConnectUri_{
         "/connect",
         HTTP_POST,
@@ -76,10 +95,15 @@ WifiProvisioningWeb::WifiProvisioningWeb(
 WifiProvisioningWeb::~WifiProvisioningWeb() { stop(); }
 
 void WifiProvisioningWeb::start(
-    std::string_view apSsid, std::string_view apPass)
+    std::string_view apSsid,
+    std::string_view apPass,
+    OnProvisioned onProvisioned,
+    OnProvisionFailed onProvisionFailed)
 {
     apSsid_ = apSsid;
     apPass_ = apPass;
+    onProvisioned_ = onProvisioned;
+    onProvisionFailed_ = onProvisionFailed;
     configureWifiAp();
 
     configureHttpServer();
@@ -95,6 +119,7 @@ void WifiProvisioningWeb::configureHttpServer()
 {
     ESP_ERROR_CHECK(httpServer_.start());
     httpServer_.registerUri(wifiSignInPageUri_);
+    httpServer_.registerUri(wifiSignInPageCssUri_);
     httpServer_.registerUri(wifiConnectUri_);
 }
 
@@ -114,6 +139,7 @@ void WifiProvisioningWeb::wifiConnect(void* arg)
     size_t retry = 0;
     volatile bool provisioningFinished = false;
     volatile bool provisioningSuccessful = false;
+    FailReason failReason;
     size_t maxRetries = 3;
     wifiProv.wifiManager_.setConfig(std::make_unique<WifiConfigStation>(
         wifiProv.ssid_,
@@ -129,16 +155,19 @@ void WifiProvisioningWeb::wifiConnect(void* arg)
          &retry,
          &maxRetries,
          &provisioningSuccessful,
-         &provisioningFinished](uint8_t reason)
+         &provisioningFinished,
+         &failReason](uint8_t reason)
         {
             switch (reason)
             {
             case WIFI_REASON_NO_AP_FOUND:
                 ESP_LOGW(TAG, "Requested AP not found");
+                failReason = FailReason::APNotFound;
                 retry++;
                 break;
             case WIFI_REASON_AUTH_FAIL:
                 ESP_LOGW(TAG, "Invalid password");
+                failReason = FailReason::InvalidAPPassword;
                 provisioningSuccessful = false;
                 provisioningFinished = true;
                 xTaskNotifyGive(wifiProv.wifiConnectTaskHandle_);
@@ -166,10 +195,22 @@ void WifiProvisioningWeb::wifiConnect(void* arg)
     if (provisioningSuccessful)
     {
         wifiProv.isProvisioned_ = true;
+        if (wifiProv.onProvisioned_)
+        {
+            wifiProv.onProvisioned_();
+        }
     }
     else
     {
-        wifiProv.start(wifiProv.apSsid_, wifiProv.apPass_);
+        if (wifiProv.onProvisionFailed_)
+        {
+            wifiProv.onProvisionFailed_(failReason);
+        }
+        wifiProv.start(
+            wifiProv.apSsid_,
+            wifiProv.apPass_,
+            wifiProv.onProvisioned_,
+            wifiProv.onProvisionFailed_);
     }
     vTaskDelete(nullptr);
 }

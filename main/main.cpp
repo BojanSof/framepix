@@ -43,25 +43,6 @@ extern "C" void app_main()
     HttpServer httpServer{};
     WifiProvisioningWeb provisioningWeb{ manager, httpServer };
     provisioningWeb.start("FramePix", "12345678");
-    /*WifiManager manager{std::make_unique<WifiConfigAP>(WifiConfigAP{
-     * "ESP_CXX", "12345678"
-     * })};*/
-    /**/
-    /*using namespace EspHttpServer;*/
-    /*HttpServer httpServer;*/
-    /*HttpUri uri(*/
-    /*    "/",*/
-    /*    HTTP_GET,*/
-    /*    [](HttpRequest req) -> HttpResponse*/
-    /*    {*/
-    /*        HttpResponse resp{ req };*/
-    /*        resp.setBody("Dummy response!", "text/plain");*/
-    /*        return resp;*/
-    /*    });*/
-    /*ESP_ERROR_CHECK(httpServer.start());*/
-    /*ESP_ERROR_CHECK(httpServer.registerUri(uri));*/
-    /**/
-    /*ESP_LOGI(TAG, "HTTP server started and register / URI");*/
 
     while (1)
     {

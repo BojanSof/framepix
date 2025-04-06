@@ -1,0 +1,120 @@
+/* Base styles */
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background-color: #f2f2f2;
+  color: #333;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.container {
+  max-width: 480px;
+  margin: 0 auto;
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Header styles */
+header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.theme-toggle {
+  background-color: #007BFF;
+  border: none;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.theme-toggle:hover {
+  background-color: #0056b3;
+}
+
+/* Form styles */
+.wifi-form label {
+  display: block;
+  margin-top: 10px;
+}
+
+.wifi-form input[type="text"],
+.wifi-form input[type="password"] {
+  width: 100%;
+  padding: 10px;
+  margin-top: 5px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.btn-blue {
+  background-color: #007BFF;
+  color: #fff;
+  border: none;
+  width: 100%;
+  padding: 12px;
+  margin-top: 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.btn-blue:hover {
+  background-color: #0056b3;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  body {
+    padding: 10px;
+  }
+  .container {
+    padding: 15px;
+  }
+  header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .theme-toggle {
+    align-self: flex-end;
+    margin-top: 10px;
+  }
+}
+
+/* Dark theme styles */
+body.dark {
+  background-color: #333;
+  color: #ddd;
+}
+
+body.dark .container {
+  background-color: #444;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+}
+
+body.dark input[type="text"],
+body.dark input[type="password"] {
+  background-color: #555;
+  border: 1px solid #666;
+  color: #ddd;
+}
+
+body.dark .btn-blue,
+body.dark .theme-toggle {
+  background-color: #66b3ff;
+}
+
+body.dark .btn-blue:hover,
+body.dark .theme-toggle:hover {
+  background-color: #3399ff;
+}
+
