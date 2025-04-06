@@ -1,6 +1,7 @@
 #ifndef _ESP_WIFI_MANAGER_CXX_WIFI_CONFIG_HPP
 #define _ESP_WIFI_MANAGER_CXX_WIFI_CONFIG_HPP
 
+#include "esp_wifi_types_generic.h"
 #include <esp_log.h>
 #include <esp_mac.h>
 #include <esp_wifi.h>
@@ -205,7 +206,7 @@ private:
 
 public:
     using OnConnected = std::function<void(std::string ip)>;
-    using OnDisconnected = std::function<void()>;
+    using OnDisconnected = std::function<void(uint8_t reason)>;
 
 public:
     WifiConfigStation(
@@ -285,10 +286,12 @@ protected:
             }
             else if (event_id == WIFI_EVENT_STA_DISCONNECTED)
             {
+                auto* event = reinterpret_cast<wifi_event_sta_disconnected_t*>(
+                    event_data);
                 ESP_LOGI(TAG, "Station disconnected from AP");
                 if (staConfig->onDisconnected_)
                 {
-                    staConfig->onDisconnected_();
+                    staConfig->onDisconnected_(event->reason);
                 }
             }
         }

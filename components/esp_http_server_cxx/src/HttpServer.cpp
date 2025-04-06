@@ -10,7 +10,7 @@ esp_err_t HttpServer::start(uint16_t port)
     return httpd_start(&server_, &config_);
 }
 
-esp_err_t HttpServer::stop() { return httpd_stop(&server_); }
+esp_err_t HttpServer::stop() { return httpd_stop(server_); }
 
 esp_err_t HttpServer::registerUri(HttpUri& uri)
 {

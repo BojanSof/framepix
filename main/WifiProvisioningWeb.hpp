@@ -4,6 +4,8 @@
 #include "HttpServer.hpp"
 #include "WifiManager.hpp"
 
+#include "freertos/task.h"
+
 #include <string_view>
 
 namespace EspWifiProvisioningWeb
@@ -24,10 +26,28 @@ public:
     void stop();
 
 private:
+    void configureHttpServer();
+    void deconfigureHttpServer();
+    void configureWifiAp();
+
+private:
+    static void wifiConnect(void* arg);
+
+private:
     WifiManager& wifiManager_;
     HttpServer& httpServer_;
     HttpUri wifiSignInPageUri_;
     HttpUri wifiConnectUri_;
+    TaskHandle_t wifiConnectTaskHandle_{ nullptr };
+
+    // for connecting to AP
+    std::string_view apSsid_;
+    std::string_view apPass_;
+    std::string_view ssid_;
+    std::string_view pass_;
+
+    // status
+    bool isProvisioned_{ false };
 };
 }
 
