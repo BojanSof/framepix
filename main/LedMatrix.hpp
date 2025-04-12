@@ -14,10 +14,9 @@
 template<uint16_t Width, uint16_t Height, bool Serpentine = true>
 class WS2812Matrix
 {
-private:
+public:
     static constexpr size_t numPixels = Width * Height;
 
-public:
     struct RGB
     {
         uint8_t r, g, b;
@@ -135,5 +134,7 @@ private:
         }
     }
 };
+
+using LedMatrix = WS2812Matrix<16, 16, true>;
 
 #endif  // LED_MATRIX_HPP

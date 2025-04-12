@@ -48,8 +48,8 @@ private:
 
 private:
     httpd_req_t* req_;
-    std::string_view content_;
-    const char* contentType_;
+    std::string_view content_{};
+    const char* contentType_{};
 };
 
 }  // namespace EspHttpServer

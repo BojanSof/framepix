@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WiFi Setup</title>
-  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="css/styles.css">
   <script>
     function toggleTheme() {
       document.body.classList.toggle('dark');
@@ -12,10 +12,10 @@
   </script>
 </head>
 <body>
-  <div class="container">
+<button id="themeToggleBtn" class="theme-toggle btn-blue" onclick="toggleTheme()">Toggle Dark Theme</button>
+  <div class="wifi-login-container">
     <header>
       <h2>Enter WiFi Credentials</h2>
-      <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
     </header>
     <form action="/connect" method="POST" class="wifi-form">
       <label for="ssid">SSID:</label>
