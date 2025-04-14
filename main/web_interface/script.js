@@ -7,6 +7,7 @@ const applyBtn = document.getElementById('applyBtn');
 const themeToggleBtn = document.getElementById('themeToggleBtn');
 const undoBtn = document.getElementById('undoBtn');
 const redoBtn = document.getElementById('redoBtn');
+const imageInput = document.getElementById('imageInput');
 
 let isDragging = false;
 let currentTool = "painter"; // "painter" or "eraser"
@@ -151,6 +152,61 @@ function getMatrixDesign() {
   return design;
 }
 
+function transformImageToLEDMatrix(image) {
+  // Create an offscreen canvas with the desired LED matrix dimensions.
+  const canvas = document.createElement('canvas');
+  canvas.width = MATRIX_SIZE;
+  canvas.height = MATRIX_SIZE;
+  const ctx = canvas.getContext('2d');
+
+  // Draw the image scaled into the 16x16 canvas.
+  // This will automatically scale the image.
+  ctx.drawImage(image, 0, 0, MATRIX_SIZE, MATRIX_SIZE);
+
+  // Extract pixel data.
+  const imageData = ctx.getImageData(0, 0, MATRIX_SIZE, MATRIX_SIZE);
+  const data = imageData.data; // Array of RGBA values.
+
+  // Loop through each pixel.
+  for (let row = 0; row < MATRIX_SIZE; row++) {
+    for (let col = 0; col < MATRIX_SIZE; col++) {
+      const index = (row * MATRIX_SIZE + col) * 4; // 4 channels per pixel.
+      const r = data[index];
+      const g = data[index + 1];
+      const b = data[index + 2];
+      // Convert to hex string.
+      const hex =
+        '#' +
+        [r, g, b]
+          .map((v) => v.toString(16).padStart(2, '0'))
+          .join('');
+
+      // Update the preview grid cell.
+      const cell = document.querySelector(
+        `.cell[data-row="${row}"][data-col="${col}"] div`
+      );
+      if (cell) {
+        cell.style.backgroundColor = hex;
+      }
+    }
+  }
+}
+
+function importImage(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = () => {
+      transformImageToLEDMatrix(img);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
 function exportAsPNG() {
   const canvasSize = 512;
   const cellSize = canvasSize / MATRIX_SIZE;
@@ -203,6 +259,7 @@ document.addEventListener('touchend', onInteractionEnd);
 undoBtn.addEventListener('click', undo);
 redoBtn.addEventListener('click', redo);
 clearBtn.addEventListener('click', clearMatrix);
+imageInput.addEventListener('change', importImage);
 exportBtn.addEventListener('click', exportAsPNG);
 applyBtn.addEventListener('click', applyDesign);
 

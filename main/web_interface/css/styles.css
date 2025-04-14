@@ -185,3 +185,17 @@ body.dark .wifi-form input[type="password"] {
     padding: 15px;
   }
 }
+
+/* Ensure the upload button (label) displays inline with other buttons */
+#uploadImageBtn {
+  /* Inherit button styling from .btn-blue */
+  display: inline-block;
+  margin: 0;  /* Remove extra margins */
+  padding: 10px 20px; /* Same as other buttons */
+  cursor: pointer;
+}
+
+/* Hide the file input itself */
+#imageInput {
+  display: none;
+}
