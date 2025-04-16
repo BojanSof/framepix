@@ -70,6 +70,7 @@ FramepixServer::FramepixServer(HttpServer& httpServer, LedMatrix& ledMatrix)
             if (content.empty())
             {
                 response.setStatus("400 Bad Request");
+                response.setContent("Invalid request content", "text/plain");
             }
             else
             {
@@ -77,21 +78,27 @@ FramepixServer::FramepixServer(HttpServer& httpServer, LedMatrix& ledMatrix)
                 if (!root)
                 {
                     response.setStatus("400 Bad Request");
+                    response.setContent(
+                        "Invalid request content", "text/plain");
                 }
                 else
                 {
                     cJSON* matrix = cJSON_GetObjectItem(root, "matrix");
                     if (!cJSON_IsArray(matrix))
                     {
+                        ESP_LOGW(TAG, "Invalid Request Content");
                         cJSON_Delete(root);
                         response.setStatus("400 Bad Request");
-                        ESP_LOGW(TAG, "Invalid Request Content");
+                        response.setContent(
+                            "Invalid request content", "text/plain");
                     }
                     else if (cJSON_GetArraySize(matrix) != LedMatrix::numPixels)
                     {
+                        ESP_LOGW(TAG, "Invalid Request Content");
                         cJSON_Delete(root);
                         response.setStatus("400 Bad Request");
-                        ESP_LOGW(TAG, "Invalid Request Content");
+                        response.setContent(
+                            "Invalid request content", "text/plain");
                     }
                     else
                     {
@@ -118,6 +125,7 @@ FramepixServer::FramepixServer(HttpServer& httpServer, LedMatrix& ledMatrix)
                         {
                             ESP_LOGW(TAG, "Invalid color data");
                             response.setStatus("400 Bad Request");
+                            response.setContent("Invalid color", "text/plain");
                         }
                         else
                         {
@@ -125,6 +133,7 @@ FramepixServer::FramepixServer(HttpServer& httpServer, LedMatrix& ledMatrix)
                             ledMatrix_.setAllPixels(pixelData);
                             ledMatrix_.update();
                             response.setStatus("200 OK");
+                            response.setContent("OK", "text/plain");
                         }
                     }
                 }

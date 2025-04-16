@@ -126,17 +126,38 @@ function createMatrix() {
 
 function applyTool(innerDiv) {
   if (currentTool === "painter") {
-    innerDiv.style.backgroundColor = colorPicker.value;
+    const originalHex = colorPicker.value; 
+    const scaledHex = scaleColorForLED(originalHex);
+    const previewHex = originalHex;
+    innerDiv.style.backgroundColor = previewHex;
+    innerDiv.dataset.actualColor = scaledHex;
   } else if (currentTool === "eraser") {
     innerDiv.style.backgroundColor = "";
+    delete innerDiv.dataset.actualColor;
   }
 }
 
 function clearMatrix() {
   document.querySelectorAll('.matrix .cell div').forEach(inner => {
     inner.style.backgroundColor = '';
+    delete inner.dataset.actualColor;
   });
   pushHistory();
+}
+
+function scaleColorForLED(hex) {
+  // Remove the "#" and parse channels as base-16 numbers.
+  let r = parseInt(hex.substring(1, 3), 16);
+  let g = parseInt(hex.substring(3, 5), 16);
+  let b = parseInt(hex.substring(5, 7), 16);
+
+  // Scale: factor = 50/255
+  const factor = 50 / 255;
+  r = Math.round(r * factor);
+  g = Math.round(g * factor);
+  b = Math.round(b * factor);
+
+  return `rgb(${r}, ${g}, ${b})`;
 }
 
 function getMatrixDesign() {
@@ -145,7 +166,7 @@ function getMatrixDesign() {
   for (let row = 0; row < MATRIX_SIZE; row++) {
     for (let col = 0; col < MATRIX_SIZE; col++) {
       const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"] div`);
-      const color = rgba2hex(cell.style.backgroundColor || "rgb(0,0,0)");
+      const color = rgba2hex(cell.dataset.actualColor || "rgb(0,0,0)");
       design.push(color);
     }
   }
@@ -187,6 +208,7 @@ function transformImageToLEDMatrix(image) {
       );
       if (cell) {
         cell.style.backgroundColor = hex;
+        cell.dataset.actualColor = scaleColorForLED(hex);
       }
     }
   }
@@ -218,7 +240,7 @@ function exportAsPNG() {
   for (let row = 0; row < MATRIX_SIZE; row++) {
     for (let col = 0; col < MATRIX_SIZE; col++) {
       const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"] div`);
-      const color = cell.style.backgroundColor || "#000000";
+      const color = cell.dataset.actualColor || "#000000";
       ctx.fillStyle = color;
       ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
     }
