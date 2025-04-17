@@ -9,6 +9,16 @@ const undoBtn = document.getElementById('undoBtn');
 const redoBtn = document.getElementById('redoBtn');
 const imageInput = document.getElementById('imageInput');
 
+// Animation related elements
+// Timeline control buttons
+const deleteFrameBtn = document.getElementById("deleteFrameBtn");
+const insertFrameBtn = document.getElementById("insertFrameBtn");
+const moveLeftBtn = document.getElementById("moveLeftBtn");
+const moveRightBtn = document.getElementById("moveRightBtn");
+
+const intervalInput = document.getElementById("intervalInput");
+const applyAnimationBtn = document.getElementById("applyAnimationBtn");
+
 let isDragging = false;
 let currentTool = "painter"; // "painter" or "eraser"
 let hasChanged = false; // flag to record if a change occurred during drag
@@ -16,6 +26,10 @@ let hasChanged = false; // flag to record if a change occurred during drag
 // History management for undo/redo: store snapshots of the grid state as 2D arrays.
 const history = [];
 let historyIndex = -1;
+
+// Animation storage
+let animationFrames = [];
+let selectedFrameIndex = 0; // Currently selected frame index in the timeline.
 
 function captureState() {
   const state = [];
@@ -143,6 +157,9 @@ function clearMatrix() {
     delete inner.dataset.actualColor;
   });
   pushHistory();
+  // update animation frames
+  animationFrames[selectedFrameIndex] = captureState();
+  renderFrameTimeline();
 }
 
 function scaleColorForLED(hex) {
@@ -160,8 +177,9 @@ function scaleColorForLED(hex) {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
+const rgba2hex = (rgba) => `#${rgba.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(\d+\.{0,1}\d*))?\)$/).slice(1).map((n, i) => (i === 3 ? Math.round(parseFloat(n) * 255) : parseFloat(n)).toString(16).padStart(2, '0').replace('NaN', '')).join('')}`
+
 function getMatrixDesign() {
-  const rgba2hex = (rgba) => `#${rgba.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(\d+\.{0,1}\d*))?\)$/).slice(1).map((n, i) => (i === 3 ? Math.round(parseFloat(n) * 255) : parseFloat(n)).toString(16).padStart(2, '0').replace('NaN', '')).join('')}`
   const design = [];
   for (let row = 0; row < MATRIX_SIZE; row++) {
     for (let col = 0; col < MATRIX_SIZE; col++) {
@@ -267,10 +285,51 @@ function applyDesign() {
   .catch(console.error);
 }
 
+function applyAnimation() {
+  // Update the current frame with the latest grid state
+  animationFrames[selectedFrameIndex] = captureState();
+
+  // Convert a 2D state into a 1D LED-scaled hex array
+  function processFrame(frame2D) {
+    const frameFlat = [];
+    for (let row = 0; row < MATRIX_SIZE; row++) {
+      for (let col = 0; col < MATRIX_SIZE; col++) {
+        const rgba = frame2D[row][col] || "rgb(0, 0, 0)";
+        const hex = rgba2hex(rgba);
+        const scaled = rgba2hex(scaleColorForLED(hex));
+        frameFlat.push(scaled);
+      }
+    }
+    return frameFlat;
+  }
+
+  // Process all frames into 1D LED-scaled arrays
+  const processedFrames = animationFrames.map(processFrame);
+
+  // Prepare the payload
+  const payload = {
+    interval_ms: parseInt(intervalInput.value),
+    frames: processedFrames
+  };
+
+  console.log("Animation:", payload);
+
+  fetch('/animation', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(res => res.ok ? console.log("Animation sent!") : console.error("Animation send failed"))
+  .catch(console.error);
+}
+
 function onInteractionEnd() {
   if (hasChanged) {
     pushHistory();
     hasChanged = false;
+    // Update the animations related stuff
+    animationFrames[selectedFrameIndex] = captureState();
+    renderFrameTimeline();
   }
   isDragging = false;
 }
@@ -285,4 +344,91 @@ imageInput.addEventListener('change', importImage);
 exportBtn.addEventListener('click', exportAsPNG);
 applyBtn.addEventListener('click', applyDesign);
 
+// Animation Timeline Functions
+function renderFrameTimeline() {
+  const timeline = document.getElementById("frameTimeline");
+  timeline.innerHTML = "";
+  animationFrames.forEach((frame, index) => {
+    const thumb = document.createElement("div");
+    thumb.classList.add("frame-thumb");
+    thumb.dataset.frameIndex = index;
+    if (index === selectedFrameIndex) {
+      thumb.classList.add("selected-frame");
+    }
+    
+    const numOverlay = document.createElement("div");
+    numOverlay.classList.add("frame-number");
+    numOverlay.textContent = index + 1;
+    thumb.appendChild(numOverlay);
+    
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d");
+    const cellSize = canvas.width / MATRIX_SIZE;
+    for (let row = 0; row < MATRIX_SIZE; row++) {
+      for (let col = 0; col < MATRIX_SIZE; col++) {
+        const hex = frame[row][col] || "#000000";
+        ctx.fillStyle = hex;
+        ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+      }
+    }
+    thumb.appendChild(canvas);
+    
+    thumb.addEventListener("click", () => {
+      selectedFrameIndex = index;
+      applyState(animationFrames[index]);
+      renderFrameTimeline();
+    });
+    
+    timeline.appendChild(thumb);
+  });
+}
+
+// Animation timeline Control Functions
+deleteFrameBtn.addEventListener("click", () => {
+  if (animationFrames.length > 1) {
+    animationFrames.splice(selectedFrameIndex, 1);
+    if (selectedFrameIndex >= animationFrames.length) {
+      selectedFrameIndex = animationFrames.length - 1;
+    }
+    applyState(animationFrames[selectedFrameIndex]);
+    renderFrameTimeline();
+  } else {
+    alert("Cannot delete the only frame.");
+  }
+});
+
+insertFrameBtn.addEventListener("click", () => {
+  const newFrame = JSON.parse(JSON.stringify(animationFrames[selectedFrameIndex]));
+  animationFrames.splice(selectedFrameIndex + 1, 0, newFrame);
+  selectedFrameIndex++;
+  renderFrameTimeline();
+});
+
+moveLeftBtn.addEventListener("click", () => {
+  if (selectedFrameIndex > 0) {
+    [animationFrames[selectedFrameIndex - 1], animationFrames[selectedFrameIndex]] =
+      [animationFrames[selectedFrameIndex], animationFrames[selectedFrameIndex - 1]];
+    selectedFrameIndex--;
+    renderFrameTimeline();
+  }
+});
+
+moveRightBtn.addEventListener("click", () => {
+  if (selectedFrameIndex < animationFrames.length - 1) {
+    [animationFrames[selectedFrameIndex + 1], animationFrames[selectedFrameIndex]] =
+      [animationFrames[selectedFrameIndex], animationFrames[selectedFrameIndex + 1]];
+    selectedFrameIndex++;
+    renderFrameTimeline();
+  }
+});
+
+applyAnimationBtn.addEventListener("click", applyAnimation);
+
+// Initialization
 createMatrix();
+
+// For animations, initialize with at least one frame from the current state.
+animationFrames = [captureState()];
+renderFrameTimeline();

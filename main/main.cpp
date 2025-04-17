@@ -14,6 +14,7 @@
 
 #include "FramepixServer.hpp"
 #include "LedMatrix.hpp"
+#include "MatrixAnimator.hpp"
 
 #define TAG "framepix"
 
@@ -50,9 +51,10 @@ extern "C" void app_main()
         "***REMOVED***", "***REMOVED***") };
     HttpServer httpServer{};
 
-    WS2812Matrix<16, 16> matrix(GPIO_NUM_6);
+    LedMatrix matrix(GPIO_NUM_6);
+    MatrixAnimator<LedMatrix> animator{ matrix };
 
-    FramepixServer framepixServer{ httpServer, matrix };
+    FramepixServer framepixServer{ httpServer, matrix, animator };
     framepixServer.start();
     /*const uint8_t val = 30;*/
     /*matrix.fill({ val, 0, 0 });*/
