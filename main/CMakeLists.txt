@@ -3,9 +3,6 @@ idf_component_register(
     "main.cpp"
     "WifiProvisioningWeb.cpp"
     "FramepixServer.cpp"
-    "LedMatrix.cpp"
-    "MatrixAnimator.cpp"
-    "led_strip_encoder.c"
   INCLUDE_DIRS ""
   EMBED_FILES
     "web_interface/wifi_login.html"
