@@ -82,6 +82,12 @@ function applyState(state) {
     for (let col = 0; col < MATRIX_SIZE; col++) {
       const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"] div`);
       cell.style.backgroundColor = state[row][col];
+      // update actual color
+      if (state[row][col]) {
+        cell.dataset.actualColor = scaleColorForLED(state[row][col]);
+      } else {
+        delete cell.dataset.actualColor;
+      }
     }
   }
   // update animation frames
