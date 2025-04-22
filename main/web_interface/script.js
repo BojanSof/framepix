@@ -24,8 +24,14 @@ let currentTool = "painter"; // "painter" or "eraser" or "bucket"
 let hasChanged = false; // flag to record if a change occurred during drag
 
 // History management for undo/redo: store snapshots of the grid state as 2D arrays.
-const history = [];
-let historyIndex = -1;
+let perFrameHistory = [];
+let perFrameHistoryIndex = [];
+
+function initHistoryForFrame(frameIdx) {
+  const state = animationFrames[frameIdx];
+  perFrameHistory[frameIdx] = [ state.map(row => [...row]) ]; // deep copy 2D
+  perFrameHistoryIndex[frameIdx] = 0;
+}
 
 // Animation storage
 let animationFrames = [];
@@ -84,23 +90,33 @@ function applyState(state) {
 }
 
 function pushHistory() {
-  // Discard any redo states.
-  history.splice(historyIndex + 1);
-  history.push(captureState());
-  historyIndex = history.length - 1;
+  const idx = selectedFrameIndex;
+  const stack = perFrameHistory[idx];
+  // discard any redo states
+  stack.splice(perFrameHistoryIndex[idx] + 1);
+  stack.push(captureState());
+  perFrameHistoryIndex[idx] = stack.length - 1;
 }
 
 function undo() {
-  if (historyIndex > 0) {
-    historyIndex--;
-    applyState(history[historyIndex]);
+  const idx = selectedFrameIndex;
+  const stack = perFrameHistory[idx];
+  let hi = perFrameHistoryIndex[idx];
+  if (hi > 0) {
+    hi--;
+    perFrameHistoryIndex[idx] = hi;
+    applyState(stack[hi]);
   }
 }
 
 function redo() {
-  if (historyIndex < history.length - 1) {
-    historyIndex++;
-    applyState(history[historyIndex]);
+  const idx = selectedFrameIndex;
+  const stack = perFrameHistory[idx];
+  let hi = perFrameHistoryIndex[idx];
+  if (hi < stack.length - 1) {
+    hi++;
+    perFrameHistoryIndex[idx] = hi;
+    applyState(stack[hi]);
   }
 }
 
@@ -175,7 +191,6 @@ function createMatrix() {
       matrixEl.appendChild(cell);
     }
   }
-  pushHistory();
 }
 
 function applyTool(innerDiv) {
@@ -439,27 +454,37 @@ function renderFrameTimeline() {
 deleteFrameBtn.addEventListener("click", () => {
   if (animationFrames.length > 1) {
     animationFrames.splice(selectedFrameIndex, 1);
+    perFrameHistory.splice(selectedFrameIndex, 1);
+    perFrameHistoryIndex.splice(selectedFrameIndex, 1);
+
     if (selectedFrameIndex >= animationFrames.length) {
       selectedFrameIndex = animationFrames.length - 1;
     }
     applyState(animationFrames[selectedFrameIndex]);
     renderFrameTimeline();
-  } else {
-    alert("Cannot delete the only frame.");
   }
 });
 
 insertFrameBtn.addEventListener("click", () => {
   const newFrame = JSON.parse(JSON.stringify(animationFrames[selectedFrameIndex]));
   animationFrames.splice(selectedFrameIndex + 1, 0, newFrame);
+  // init history for the new frame
+  perFrameHistory.splice(selectedFrameIndex + 1, 0, undefined);
+  perFrameHistoryIndex.splice(selectedFrameIndex + 1, 0, 0);
+  initHistoryForFrame(selectedFrameIndex + 1);
+
   selectedFrameIndex++;
   renderFrameTimeline();
 });
 
 moveLeftBtn.addEventListener("click", () => {
   if (selectedFrameIndex > 0) {
-    [animationFrames[selectedFrameIndex - 1], animationFrames[selectedFrameIndex]] =
-      [animationFrames[selectedFrameIndex], animationFrames[selectedFrameIndex - 1]];
+    const i = selectedFrameIndex;
+    // swap frames
+    [animationFrames[i-1], animationFrames[i]] = [animationFrames[i], animationFrames[i-1]];
+    // swap history
+    [perFrameHistory[i-1], perFrameHistory[i]] = [perFrameHistory[i], perFrameHistory[i-1]];
+    [perFrameHistoryIndex[i-1], perFrameHistoryIndex[i]] = [perFrameHistoryIndex[i], perFrameHistoryIndex[i-1]];
     selectedFrameIndex--;
     renderFrameTimeline();
   }
@@ -467,8 +492,10 @@ moveLeftBtn.addEventListener("click", () => {
 
 moveRightBtn.addEventListener("click", () => {
   if (selectedFrameIndex < animationFrames.length - 1) {
-    [animationFrames[selectedFrameIndex + 1], animationFrames[selectedFrameIndex]] =
-      [animationFrames[selectedFrameIndex], animationFrames[selectedFrameIndex + 1]];
+    const i = selectedFrameIndex;
+    [animationFrames[i+1], animationFrames[i]] = [animationFrames[i], animationFrames[i+1]];
+    [perFrameHistory[i+1], perFrameHistory[i]] = [perFrameHistory[i], perFrameHistory[i+1]];
+    [perFrameHistoryIndex[i+1], perFrameHistoryIndex[i]] = [perFrameHistoryIndex[i], perFrameHistoryIndex[i+1]];
     selectedFrameIndex++;
     renderFrameTimeline();
   }
@@ -482,3 +509,4 @@ createMatrix();
 // For animations, initialize with at least one frame from the current state.
 animationFrames = [captureState()];
 renderFrameTimeline();
+initHistoryForFrame(0);
