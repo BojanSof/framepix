@@ -20,7 +20,7 @@ const intervalInput = document.getElementById("intervalInput");
 const applyAnimationBtn = document.getElementById("applyAnimationBtn");
 
 let isDragging = false;
-let currentTool = "painter"; // "painter" or "eraser"
+let currentTool = "painter"; // "painter" or "eraser" or "bucket"
 let hasChanged = false; // flag to record if a change occurred during drag
 
 // History management for undo/redo: store snapshots of the grid state as 2D arrays.
@@ -30,6 +30,33 @@ let historyIndex = -1;
 // Animation storage
 let animationFrames = [];
 let selectedFrameIndex = 0; // Currently selected frame index in the timeline.
+
+// Flood-fill
+function bucketFill(x, y, targetColor, previewHex, scaledHex) {
+  const visited = new Set();
+  const queue = [[x, y]];
+
+  while (queue.length > 0) {
+    const [cx, cy] = queue.pop();
+    const key = `${cx},${cy}`;
+    if (visited.has(key)) continue;
+    visited.add(key);
+
+    const div = document.querySelector(`.cell[data-row='${cy}'][data-col='${cx}'] div`);
+    if (!div) continue;
+
+    const divColor = div.dataset.actualColor || "";
+    if (divColor !== targetColor) continue;
+
+    div.style.backgroundColor = previewHex;
+    div.dataset.actualColor = scaledHex;
+
+    queue.push([cx + 1, cy]);
+    queue.push([cx - 1, cy]);
+    queue.push([cx, cy + 1]);
+    queue.push([cx, cy - 1]);
+  }
+}
 
 function captureState() {
   const state = [];
@@ -51,6 +78,9 @@ function applyState(state) {
       cell.style.backgroundColor = state[row][col];
     }
   }
+  // update animation frames
+  animationFrames[selectedFrameIndex] = captureState();
+  renderFrameTimeline();
 }
 
 function pushHistory() {
@@ -79,10 +109,18 @@ document.getElementById('painterTool').addEventListener('click', () => {
   currentTool = "painter";
   document.getElementById('painterTool').classList.add('selected');
   document.getElementById('eraserTool').classList.remove('selected');
+  document.getElementById('bucketTool').classList.remove('selected');
 });
 document.getElementById('eraserTool').addEventListener('click', () => {
   currentTool = "eraser";
   document.getElementById('eraserTool').classList.add('selected');
+  document.getElementById('painterTool').classList.remove('selected');
+  document.getElementById('bucketTool').classList.remove('selected');
+});
+document.getElementById("bucketTool").addEventListener("click", () => {
+  currentTool = "bucket";
+  document.getElementById('bucketTool').classList.add('selected');
+  document.getElementById('eraserTool').classList.remove('selected');
   document.getElementById('painterTool').classList.remove('selected');
 });
 
@@ -100,6 +138,8 @@ function createMatrix() {
       cell.dataset.row = row;
       cell.dataset.col = col;
       const inner = document.createElement('div');
+      inner.dataset.x = col;
+      inner.dataset.y = row;
       cell.appendChild(inner);
       
       // Mouse events.
@@ -148,6 +188,16 @@ function applyTool(innerDiv) {
   } else if (currentTool === "eraser") {
     innerDiv.style.backgroundColor = "";
     delete innerDiv.dataset.actualColor;
+  } else if (currentTool === "bucket") {
+    const originalHex = colorPicker.value;
+    const scaledHex = scaleColorForLED(originalHex);
+    const previewHex = originalHex;
+
+    const targetColor = innerDiv.dataset.actualColor || "";
+    const x = parseInt(innerDiv.dataset.x);
+    const y = parseInt(innerDiv.dataset.y);
+
+    bucketFill(x, y, targetColor, previewHex, scaledHex);
   }
 }
 
