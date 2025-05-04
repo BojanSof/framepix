@@ -106,6 +106,7 @@ template<uint16_t Width, uint16_t Height, bool Serpentine>
 size_t
 WS2812Matrix<Width, Height, Serpentine>::index(uint16_t x, uint16_t y) const
 {
+    y = Height - 1 - y;
     if constexpr (Serpentine)
     {
         return (y % 2 == 0) ? (y * Width + x) : (y * Width + (Width - 1 - x));
