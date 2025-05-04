@@ -26,6 +26,7 @@ private:
     HttpUri framepixPageUri_;
     HttpUri framepixCssUri_;
     HttpUri framepixJsUri_;
+    HttpUri jszipUri_;
     HttpUri framepixMatrixUri_;
     HttpUri framepixAnimationUri_;
 };

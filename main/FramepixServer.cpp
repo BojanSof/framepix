@@ -13,6 +13,9 @@ extern const uint8_t css_styles_css_end[] asm("_binary_styles_css_end");
 extern const uint8_t script_js_start[] asm("_binary_script_js_start");
 extern const uint8_t script_js_end[] asm("_binary_script_js_end");
 
+extern const uint8_t jszip_start[] asm("_binary_jszip_min_js_start");
+extern const uint8_t jszip_end[] asm("_binary_jszip_min_js_end");
+
 FramepixServer::FramepixServer(
     HttpServer& httpServer,
     LedMatrix& ledMatrix,
@@ -64,6 +67,20 @@ FramepixServer::FramepixServer(
                               "text/css");
                           return response;
                       } }
+    , jszipUri_{ "/jszip.min.js",
+                 HTTP_GET,
+                 [](HttpRequest req) -> HttpResponse
+                 {
+                     HttpResponse response(req);
+                     response.setStatus("200 OK");
+                     size_t js_size = jszip_end - jszip_start;
+                     response.setContent(
+                         std::string_view{
+                             reinterpret_cast<const char*>(jszip_start),
+                             js_size },
+                         "text/css");
+                     return response;
+                 } }
     , framepixMatrixUri_{ "/matrix",
                           HTTP_POST,
                           [this](HttpRequest req) -> HttpResponse
@@ -269,6 +286,7 @@ void FramepixServer::start()
     httpServer_.registerUri(framepixPageUri_);
     httpServer_.registerUri(framepixCssUri_);
     httpServer_.registerUri(framepixJsUri_);
+    httpServer_.registerUri(jszipUri_);
     httpServer_.registerUri(framepixMatrixUri_);
     httpServer_.registerUri(framepixAnimationUri_);
     ESP_LOGI(TAG, "Framepix server started");
