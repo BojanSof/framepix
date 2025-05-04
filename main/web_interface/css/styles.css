@@ -188,6 +188,15 @@ header h1 {
   width: 80px;
 }
 
+/* Animation Import/Export */
+.animation-import-export {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
 /* Responsive adjustments */
 @media (max-width: 480px) {
   .controls button,
@@ -195,6 +204,20 @@ header h1 {
   .tool-option {
     width: 100%;
   }
+}
+
+/* Ensure the upload button (label) displays inline with other buttons */
+#uploadImageBtn {
+  /* Inherit button styling from .btn-blue */
+  display: inline-block;
+  margin: 0;  /* Remove extra margins */
+  padding: 10px 20px; /* Same as other buttons */
+  cursor: pointer;
+}
+
+/* Hide the file input itself */
+#imageInput {
+  display: none;
 }
 
 /* WiFi Login Form Styles */
@@ -254,16 +277,3 @@ body.dark .wifi-form input[type="password"] {
   }
 }
 
-/* Ensure the upload button (label) displays inline with other buttons */
-#uploadImageBtn {
-  /* Inherit button styling from .btn-blue */
-  display: inline-block;
-  margin: 0;  /* Remove extra margins */
-  padding: 10px 20px; /* Same as other buttons */
-  cursor: pointer;
-}
-
-/* Hide the file input itself */
-#imageInput {
-  display: none;
-}

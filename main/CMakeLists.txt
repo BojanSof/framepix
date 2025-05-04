@@ -9,4 +9,5 @@ idf_component_register(
     "web_interface/designer.html"
     "web_interface/css/styles.css"
     "web_interface/script.js"
+    "web_interface/jszip.min.js"
 )

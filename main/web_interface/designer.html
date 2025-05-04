@@ -42,10 +42,10 @@
       </div>
       
       <button id="clearBtn" class="btn-blue">Clear</button>
-      <label for="imageInput" class="btn-blue" id="uploadImageBtn">Upload Image</label>
-      <input type="file" id="imageInput" accept="image/*" style="display: none;">
-      <button id="exportBtn" class="btn-blue">Export PNG</button>
-      <button id="applyBtn" class="btn-blue">Apply</button>
+      <input type="file" id="importImage" accept="image/*" style="display: none;">
+      <button id="importImageBtn" onclick="document.getElementById('importImage').click()" class="btn-blue">Import Image</button>
+      <button id="exportImageBtn" class="btn-blue">Export Image</button>
+      <button id="applyImageBtn" class="btn-blue">Apply</button>
     </section>
     
     <!-- The main LED matrix grid -->
@@ -67,7 +67,15 @@
       <input type="number" id="intervalInput" value="100" min="1" step="1"> <span>ms</span>
       <button id="applyAnimationBtn" class="btn-blue">Apply Animation</button>
     </section>
+
+    <!-- Animation Import/Export -->
+    <section class="animation-import-export">
+      <input type="file" id="importFrames" multiple accept="image/*" style="display: none;">
+      <button onclick="document.getElementById('importFrames').click()" class="btn-blue">Import Frames</button>
+      <button id="exportFramesBtn" class="btn-blue">Export Frames</button>
+    </section>
   </div>
+  <script src="jszip.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

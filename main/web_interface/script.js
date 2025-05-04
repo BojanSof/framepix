@@ -2,12 +2,12 @@ const MATRIX_SIZE = 16;
 const matrixEl = document.getElementById('matrix');
 const colorPicker = document.getElementById('colorPicker');
 const clearBtn = document.getElementById('clearBtn');
-const exportBtn = document.getElementById('exportBtn');
-const applyBtn = document.getElementById('applyBtn');
 const themeToggleBtn = document.getElementById('themeToggleBtn');
 const undoBtn = document.getElementById('undoBtn');
 const redoBtn = document.getElementById('redoBtn');
-const imageInput = document.getElementById('imageInput');
+const importImageBtn = document.getElementById('importImage');
+const exportImageBtn = document.getElementById('exportImageBtn');
+const applyBtn = document.getElementById('applyImageBtn');
 
 // Animation related elements
 // Timeline control buttons
@@ -18,6 +18,9 @@ const moveRightBtn = document.getElementById("moveRightBtn");
 
 const intervalInput = document.getElementById("intervalInput");
 const applyAnimationBtn = document.getElementById("applyAnimationBtn");
+
+const importFramesBtn = document.getElementById("importFrames");
+const exportFramesBtn = document.getElementById("exportFramesBtn");
 
 let isDragging = false;
 let currentTool = "painter"; // "painter" or "eraser" or "bucket"
@@ -84,7 +87,9 @@ function applyState(state) {
       cell.style.backgroundColor = state[row][col];
       // update actual color
       if (state[row][col]) {
-        cell.dataset.actualColor = scaleColorForLED(state[row][col]);
+        // ensure state is in hex format
+        const hex = rgba2hex(state[row][col]);
+        cell.dataset.actualColor = scaleColorForLED(hex);
       } else {
         delete cell.dataset.actualColor;
       }
@@ -245,7 +250,8 @@ function scaleColorForLED(hex) {
   g = Math.round(g * factor);
   b = Math.round(b * factor);
 
-  return `rgb(${r}, ${g}, ${b})`;
+  const rgbColor = `rgb(${r}, ${g}, ${b})`;
+  return rgbColor;
 }
 
 const rgba2hex = (rgba) => `#${rgba.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(\d+\.{0,1}\d*))?\)$/).slice(1).map((n, i) => (i === 3 ? Math.round(parseFloat(n) * 255) : parseFloat(n)).toString(16).padStart(2, '0').replace('NaN', '')).join('')}`
@@ -255,7 +261,7 @@ function getMatrixDesign() {
   for (let row = 0; row < MATRIX_SIZE; row++) {
     for (let col = 0; col < MATRIX_SIZE; col++) {
       const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"] div`);
-      const color = rgba2hex(cell.dataset.actualColor || "rgb(0,0,0)");
+      const color = rgba2hex(cell.style.backgroundColor || "rgb(0,0,0)");
       design.push(color);
     }
   }
@@ -318,22 +324,28 @@ function importImage(event) {
   reader.readAsDataURL(file);
 }
 
-function exportAsPNG() {
-  const canvasSize = 512;
+const CANVAS_SIZE = 512;
+
+function createCanvasFromMatrix(matrix, canvasSize) {
   const cellSize = canvasSize / MATRIX_SIZE;
   const canvas = document.createElement('canvas');
   canvas.width = canvasSize;
   canvas.height = canvasSize;
   const ctx = canvas.getContext('2d');
-  
   for (let row = 0; row < MATRIX_SIZE; row++) {
     for (let col = 0; col < MATRIX_SIZE; col++) {
-      const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"] div`);
-      const color = cell.dataset.actualColor || "#000000";
+      const color = matrix[row * MATRIX_SIZE + col];
       ctx.fillStyle = color;
       ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
     }
   }
+  return canvas;
+}
+
+function exportAsPNG() {
+  const design = getMatrixDesign();
+  const matrix = design.map(color => color || "#000000");
+  const canvas = createCanvasFromMatrix(matrix, CANVAS_SIZE);
   canvas.toBlob((blob) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -411,8 +423,8 @@ document.addEventListener('touchend', onInteractionEnd);
 undoBtn.addEventListener('click', undo);
 redoBtn.addEventListener('click', redo);
 clearBtn.addEventListener('click', clearMatrix);
-imageInput.addEventListener('change', importImage);
-exportBtn.addEventListener('click', exportAsPNG);
+importImageBtn.addEventListener('change', importImage);
+exportImageBtn.addEventListener('click', exportAsPNG);
 applyBtn.addEventListener('click', applyDesign);
 
 // Animation Timeline Functions
@@ -508,6 +520,72 @@ moveRightBtn.addEventListener("click", () => {
 });
 
 applyAnimationBtn.addEventListener("click", applyAnimation);
+
+importFramesBtn.addEventListener("change", (e) => {
+  const files = Array.from(e.target.files);
+  const readerPromises = files.map(file => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.src = URL.createObjectURL(file);
+  }));
+
+  Promise.all(readerPromises).then(images => {
+    animationFrames = images.map(img => {
+      const canvas = document.createElement('canvas');
+      canvas.width = MATRIX_SIZE;
+      canvas.height = MATRIX_SIZE;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, MATRIX_SIZE, MATRIX_SIZE);
+      const imageData = ctx.getImageData(0, 0, MATRIX_SIZE, MATRIX_SIZE).data;
+
+      const frame = [];
+      for (let row = 0; row < MATRIX_SIZE; row++) {
+        const rowColors = [];
+        for (let col = 0; col < MATRIX_SIZE; col++) {
+          const i = (row * MATRIX_SIZE + col) * 4;
+          const r = imageData[i];
+          const g = imageData[i + 1];
+          const b = imageData[i + 2];
+          rowColors.push(`rgb(${r}, ${g}, ${b})`);
+        }
+        frame.push(rowColors);
+      }
+      return frame;
+    });
+    // create per frame history for each frame and init
+    perFrameHistory = animationFrames.map(frame => [ frame.map(row => [...row]) ]);
+    perFrameHistoryIndex = animationFrames.map(() => 0);
+    animationFrames.forEach((_, index) => initHistoryForFrame(index));
+
+    selectedFrameIndex = 0;
+    applyState(animationFrames[0]);
+    renderFrameTimeline();
+  });
+});
+
+exportFramesBtn.addEventListener('click', async () => {
+  const zip = new JSZip();
+  const frameInterval = parseInt(intervalInput.value);
+  const frameFolder = zip.folder("frames");
+
+  for (let i = 0; i < animationFrames.length; i++) {
+    const frame = animationFrames[i];
+    const flatFrame = frame.flat().map(color => color || "#000000");
+    const canvas = createCanvasFromMatrix(flatFrame, CANVAS_SIZE);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    frameFolder.file(`frame_${String(i).padStart(3, '0')}.png`, blob);
+  }
+
+  // Add interval text file
+  zip.file("interval.txt", frameInterval.toString());
+
+  // Generate ZIP and trigger download
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(zipBlob);
+  a.download = "animation.zip";
+  a.click();
+});
 
 // Initialization
 createMatrix();
