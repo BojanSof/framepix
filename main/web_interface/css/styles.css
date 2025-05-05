@@ -26,7 +26,7 @@ body.dark {
 /* Designer Page Styles */
 .designer-container {
   max-width: 600px;
-  margin: 0 auto;
+  margin: 5% auto;
 }
 header {
   align-items: center;
