@@ -118,9 +118,9 @@ public:
     {
         // unregister event handlers
         ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiEventHandlerInstance_));
+            WIFI_EVENT, ESP_EVENT_ANY_ID, wifiEventHandlerInstance_));
         ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            IP_EVENT, ESP_EVENT_ANY_ID, &ipEventHandlerInstance_));
+            IP_EVENT, ESP_EVENT_ANY_ID, ipEventHandlerInstance_));
         // disable the AP mode by changing the mode to STA or NULL
         wifi_mode_t mode;
         ESP_ERROR_CHECK(esp_wifi_get_mode(&mode));
@@ -259,9 +259,9 @@ public:
     {
         // unregister event handlers
         ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiEventHandlerInstance_));
+            WIFI_EVENT, ESP_EVENT_ANY_ID, wifiEventHandlerInstance_));
         ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            IP_EVENT, ESP_EVENT_ANY_ID, &ipEventHandlerInstance_));
+            IP_EVENT, ESP_EVENT_ANY_ID, ipEventHandlerInstance_));
         // disable station mode
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
     }
@@ -390,13 +390,13 @@ public:
     {
         // unregister all event handlers
         ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            WIFI_EVENT, ESP_EVENT_ANY_ID, &apWifiEventHandlerInstance_));
+            WIFI_EVENT, ESP_EVENT_ANY_ID, apWifiEventHandlerInstance_));
         ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            IP_EVENT, ESP_EVENT_ANY_ID, &apIpEventHandlerInstance_));
+            IP_EVENT, ESP_EVENT_ANY_ID, apIpEventHandlerInstance_));
         ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            WIFI_EVENT, ESP_EVENT_ANY_ID, &staWifiEventHandlerInstance_));
+            WIFI_EVENT, ESP_EVENT_ANY_ID, staWifiEventHandlerInstance_));
         ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            IP_EVENT, ESP_EVENT_ANY_ID, &staIpEventHandlerInstance_));
+            IP_EVENT, ESP_EVENT_ANY_ID, staIpEventHandlerInstance_));
         // set mode to NULL
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
     }
@@ -444,7 +444,7 @@ public:
     virtual void disable() override
     {
         esp_event_handler_instance_unregister(
-            WIFI_EVENT, WIFI_EVENT_SCAN_DONE, &scanDoneHandlerInstance_);
+            WIFI_EVENT, WIFI_EVENT_SCAN_DONE, scanDoneHandlerInstance_);
     }
 
     virtual void run() override
