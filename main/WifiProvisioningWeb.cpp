@@ -2,7 +2,9 @@
 #include "FormParser.hpp"
 #include "HttpRequest.hpp"
 #include "HttpResponse.hpp"
+
 #include <memory>
+#include <optional>
 
 #include <esp_http_server.h>
 
@@ -15,10 +17,76 @@ extern const uint8_t wifi_login_html_end[] asm("_binary_wifi_login_html_end");
 extern const uint8_t css_styles_css_start[] asm("_binary_styles_css_start");
 extern const uint8_t css_styles_css_end[] asm("_binary_styles_css_end");
 
+struct WifiCredentialsSerializer
+{
+    using value_type = WifiCredentials;
+    // length-value: [ssid_len][ssid_bytes][pass_len][pass_bytes]
+    static constexpr size_t maxSize
+        = 1 + WifiCredentials::MaxSsidLen + 1 + WifiCredentials::MaxPasswordLen;
+
+    static size_t
+    serialize(const WifiCredentials& cred, std::span<std::byte> buf) noexcept
+    {
+        // Ensure span is big enough
+        if (buf.size() < maxSize)
+        {
+            return 0;
+        }
+
+        size_t ssidLen
+            = std::min(cred.ssid.size(), WifiCredentials::MaxSsidLen);
+        size_t pwdLen
+            = std::min(cred.password.size(), WifiCredentials::MaxPasswordLen);
+
+        size_t offset = 0;
+        buf[offset++] = static_cast<std::byte>(ssidLen);
+        std::memcpy(buf.data() + offset, cred.ssid.data(), ssidLen);
+        offset += ssidLen;
+
+        buf[offset++] = static_cast<std::byte>(pwdLen);
+        std::memcpy(buf.data() + offset, cred.password.data(), pwdLen);
+        offset += pwdLen;
+
+        return offset;
+    }
+
+    static std::optional<WifiCredentials>
+    deserialize(std::span<const std::byte> buf) noexcept
+    {
+        if (buf.size() < 2)
+        {
+            return std::nullopt;
+        }
+
+        size_t offset = 0;
+        size_t ssidLen = static_cast<size_t>(buf[offset++]);
+        if (offset + ssidLen + 1 > buf.size())
+        {
+            return std::nullopt;
+        }
+
+        auto ssidPtr = reinterpret_cast<const char*>(buf.data() + offset);
+        std::string_view ssid{ ssidPtr, ssidLen };
+        offset += ssidLen;
+
+        size_t pwdLen = static_cast<size_t>(buf[offset++]);
+        if (offset + pwdLen > buf.size())
+        {
+            return std::nullopt;
+        }
+
+        auto pwdPtr = reinterpret_cast<const char*>(buf.data() + offset);
+        std::string_view pwd{ pwdPtr, pwdLen };
+
+        return WifiCredentials{ std::string{ ssid }, std::string{ pwd } };
+    }
+};
+
 WifiProvisioningWeb::WifiProvisioningWeb(
-    WifiManager& wifiManager, HttpServer& httpServer)
+    WifiManager& wifiManager, HttpServer& httpServer, Spiffs& spiffs)
     : wifiManager_{ wifiManager }
     , httpServer_{ httpServer }
+    , spiffs_{ spiffs }
     , wifiSignInPageUri_{ "/",
                           HTTP_GET,
                           [](HttpRequest req) -> HttpResponse
@@ -70,8 +138,8 @@ WifiProvisioningWeb::WifiProvisioningWeb(
             }
             else
             {
-                ssid_ = ssid.value();
-                pass_ = pass.value();
+                stationCredentials_.ssid = ssid.value();
+                stationCredentials_.password = pass.value();
                 ESP_LOGI(TAG, "SSID: %s", std::string{ ssid.value() }.c_str());
                 ESP_LOGI(
                     TAG, "Password: %s", std::string{ pass.value() }.c_str());
@@ -100,8 +168,8 @@ void WifiProvisioningWeb::start(
     OnProvisioned onProvisioned,
     OnProvisionFailed onProvisionFailed)
 {
-    apSsid_ = apSsid;
-    apPass_ = apPass;
+    apCredentials_.ssid = apSsid;
+    apCredentials_.password = apPass;
     onProvisioned_ = onProvisioned;
     onProvisionFailed_ = onProvisionFailed;
     configureWifiAp();
@@ -115,6 +183,46 @@ void WifiProvisioningWeb::stop()
     wifiManager_.setConfig(nullptr);
 }
 
+bool WifiProvisioningWeb::checkForPreviousProvisioning()
+{
+    return spiffs_.exists(wifiCredentialsFile).value_or(false);
+}
+
+bool WifiProvisioningWeb::applyPreviousProvisioning()
+{
+    // apply previous provisioning
+    // read from spiffs
+    std::array<std::byte, WifiCredentialsSerializer::maxSize> buffer{};
+    auto we = spiffs_.readObject<WifiCredentialsSerializer, WifiCredentials>(
+        wifiCredentialsFile, std::span{ buffer });
+    if (!we)
+    {
+        ESP_LOGE(
+            TAG,
+            "Failed to read credentials: %d",
+            static_cast<int>(we.error()));
+        return false;
+    }
+    auto cred = we.value();
+    if (cred.ssid.empty() || cred.password.empty())
+    {
+        ESP_LOGE(TAG, "Invalid credentials");
+        return false;
+    }
+    stationCredentials_.ssid = cred.ssid;
+    stationCredentials_.password = cred.password;
+    ESP_LOGI(TAG, "SSID: %s", stationCredentials_.ssid.c_str());
+    ESP_LOGI(TAG, "Password: %s", stationCredentials_.password.c_str());
+    xTaskCreate(
+        &wifiConnect,
+        "WifiProvConnectTask",
+        4096,
+        this,
+        tskIDLE_PRIORITY + 1,
+        &wifiConnectTaskHandle_);
+    return true;
+}
+
 void WifiProvisioningWeb::configureHttpServer()
 {
     ESP_ERROR_CHECK(httpServer_.start());
@@ -125,7 +233,8 @@ void WifiProvisioningWeb::configureHttpServer()
 
 void WifiProvisioningWeb::configureWifiAp()
 {
-    wifiManager_.setConfig(std::make_unique<WifiConfigAP>(apSsid_, apPass_));
+    wifiManager_.setConfig(std::make_unique<WifiConfigAP>(
+        apCredentials_.ssid, apCredentials_.password));
 }
 
 void WifiProvisioningWeb::deconfigureHttpServer()
@@ -142,8 +251,8 @@ void WifiProvisioningWeb::wifiConnect(void* arg)
     FailReason failReason;
     size_t maxRetries = 3;
     wifiProv.wifiManager_.setConfig(std::make_unique<WifiConfigStation>(
-        wifiProv.ssid_,
-        wifiProv.pass_,
+        wifiProv.stationCredentials_.ssid,
+        wifiProv.stationCredentials_.password,
         [&wifiProv, &provisioningFinished, &provisioningSuccessful](
             std::string ip)
         {
@@ -195,6 +304,21 @@ void WifiProvisioningWeb::wifiConnect(void* arg)
     if (provisioningSuccessful)
     {
         wifiProv.isProvisioned_ = true;
+        // save ssid and password to spiffs
+        std::array<std::byte, WifiCredentialsSerializer::maxSize> buffer{};
+        if (auto we
+            = wifiProv.spiffs_
+                  .writeObject<WifiCredentialsSerializer, WifiCredentials>(
+                      wifiProv.wifiCredentialsFile,
+                      wifiProv.stationCredentials_,
+                      std::span{ buffer });
+            !we)
+        {
+            ESP_LOGE(
+                TAG,
+                "Failed to save credentials: %d",
+                static_cast<int>(we.error()));
+        }
         if (wifiProv.onProvisioned_)
         {
             wifiProv.onProvisioned_();
@@ -207,8 +331,8 @@ void WifiProvisioningWeb::wifiConnect(void* arg)
             wifiProv.onProvisionFailed_(failReason);
         }
         wifiProv.start(
-            wifiProv.apSsid_,
-            wifiProv.apPass_,
+            wifiProv.apCredentials_.ssid,
+            wifiProv.apCredentials_.password,
             wifiProv.onProvisioned_,
             wifiProv.onProvisionFailed_);
     }

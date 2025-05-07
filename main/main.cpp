@@ -10,6 +10,8 @@
 #include "HttpServer.hpp"
 #include "WifiManager.hpp"
 
+#include "Spiffs.hpp"
+
 #include "WifiProvisioningWeb.hpp"
 
 #include "FramepixServer.hpp"
@@ -39,47 +41,56 @@ extern "C" void app_main()
     /* Initialize the event loop */
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
+    /* Initialize SPIFFS */
+    Spiffs spiffs{};
+    if (auto res = spiffs.init(Spiffs::Config{}); !res)
+    {
+        ESP_LOGE(
+            TAG,
+            "Failed to initialize SPIFFS, error: %d",
+            static_cast<int>(res.error()));
+        return;
+    }
+
     /* Initialize WiFi */
     using namespace EspWifiManager;
-    /*using namespace EspWifiProvisioningWeb;*/
-    /**/
-    /*WifiManager manager{};*/
-    /*HttpServer httpServer{};*/
-    /*WifiProvisioningWeb provisioningWeb{ manager, httpServer };*/
-    /*provisioningWeb.start("FramePix", "12345678");*/
-    WifiManager manager{ std::make_unique<WifiConfigStation>(
-        "***REMOVED***", "***REMOVED***") };
+    using namespace EspWifiProvisioningWeb;
+
+    WifiManager manager{};
     HttpServer httpServer{};
 
     LedMatrix matrix(GPIO_NUM_6);
     MatrixAnimator<LedMatrix> animator{ matrix };
 
     FramepixServer framepixServer{ httpServer, matrix, animator };
-    framepixServer.start();
-    /*const uint8_t val = 30;*/
-    /*matrix.fill({ val, 0, 0 });*/
-    /*matrix.update();*/
-    /*vTaskDelay(2000 / portTICK_PERIOD_MS);*/
-    /*matrix.fill({ 0, val, 0 });*/
-    /*matrix.update();*/
-    /*vTaskDelay(2000 / portTICK_PERIOD_MS);*/
-    /*matrix.fill({ 0, 0, val });*/
-    /*matrix.update();*/
-    /*vTaskDelay(2000 / portTICK_PERIOD_MS);*/
-    /*matrix.fill({ val, val, 0 });*/
-    /*matrix.update();*/
-    /*vTaskDelay(2000 / portTICK_PERIOD_MS);*/
-    /*matrix.fill({ val, 0, val });*/
-    /*matrix.update();*/
-    /*vTaskDelay(2000 / portTICK_PERIOD_MS);*/
-    /*matrix.fill({ 0, val, val });*/
-    /*matrix.update();*/
-    /*vTaskDelay(2000 / portTICK_PERIOD_MS);*/
-    /*matrix.fill({ val, val, val });*/
-    /*matrix.update();*/
-    /*vTaskDelay(2000 / portTICK_PERIOD_MS);*/
-    /*matrix.clear();*/
-    /*matrix.update();*/
+
+    WifiProvisioningWeb provisioningWeb{ manager, httpServer, spiffs };
+    bool provisioningApplied = false;
+    if (provisioningWeb.checkForPreviousProvisioning())
+    {
+        ESP_LOGI(TAG, "Found previous provisioning");
+        if (provisioningWeb.applyPreviousProvisioning())
+        {
+            ESP_LOGI(TAG, "Applied previous provisioning");
+            provisioningApplied = true;
+            framepixServer.start();
+        }
+        else
+        {
+            ESP_LOGE(TAG, "Failed to apply previous provisioning");
+        }
+    }
+    else
+    {
+        ESP_LOGI(TAG, "No previous provisioning found");
+    }
+    if (!provisioningApplied)
+    {
+        provisioningWeb.start(
+            "FramePix",
+            "12345678",
+            [&framepixServer]() { framepixServer.start(); });
+    }
 
     while (1)
     {
