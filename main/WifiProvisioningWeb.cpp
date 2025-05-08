@@ -188,7 +188,8 @@ bool WifiProvisioningWeb::checkForPreviousProvisioning()
     return spiffs_.exists(wifiCredentialsFile).value_or(false);
 }
 
-bool WifiProvisioningWeb::applyPreviousProvisioning()
+bool WifiProvisioningWeb::applyPreviousProvisioning(
+    OnProvisioned onProvisioned, OnProvisionFailed onProvisionFailed)
 {
     // apply previous provisioning
     // read from spiffs
@@ -207,12 +208,16 @@ bool WifiProvisioningWeb::applyPreviousProvisioning()
     if (cred.ssid.empty() || cred.password.empty())
     {
         ESP_LOGE(TAG, "Invalid credentials");
+        removePreviousProvisioning();
         return false;
     }
     stationCredentials_.ssid = cred.ssid;
     stationCredentials_.password = cred.password;
     ESP_LOGI(TAG, "SSID: %s", stationCredentials_.ssid.c_str());
     ESP_LOGI(TAG, "Password: %s", stationCredentials_.password.c_str());
+    onProvisioned_ = onProvisioned;
+    onProvisionFailed_ = onProvisionFailed;
+    checkingStoredCredentials_ = true;
     xTaskCreate(
         &wifiConnect,
         "WifiProvConnectTask",
@@ -220,6 +225,19 @@ bool WifiProvisioningWeb::applyPreviousProvisioning()
         this,
         tskIDLE_PRIORITY + 1,
         &wifiConnectTaskHandle_);
+    return true;
+}
+
+bool WifiProvisioningWeb::removePreviousProvisioning()
+{
+    if (auto we = spiffs_.remove(wifiCredentialsFile); !we)
+    {
+        ESP_LOGE(
+            TAG,
+            "Failed to remove credentials file: %d",
+            static_cast<int>(we.error()));
+        return false;
+    }
     return true;
 }
 
@@ -239,7 +257,10 @@ void WifiProvisioningWeb::configureWifiAp()
 
 void WifiProvisioningWeb::deconfigureHttpServer()
 {
-    ESP_ERROR_CHECK(httpServer_.stop());
+    if (httpServer_.isRunning())
+    {
+        ESP_ERROR_CHECK(httpServer_.stop());
+    }
 }
 
 void WifiProvisioningWeb::wifiConnect(void* arg)
@@ -326,6 +347,12 @@ void WifiProvisioningWeb::wifiConnect(void* arg)
     }
     else
     {
+        if (wifiProv.checkingStoredCredentials_)
+        {
+            // remove the file
+            wifiProv.removePreviousProvisioning();
+            wifiProv.checkingStoredCredentials_ = false;
+        }
         if (wifiProv.onProvisionFailed_)
         {
             wifiProv.onProvisionFailed_(failReason);

@@ -58,22 +58,23 @@ extern "C" void app_main()
 
     WifiManager manager{};
     HttpServer httpServer{};
+    WifiProvisioningWeb provisioningWeb{ manager, httpServer, spiffs };
 
     LedMatrix matrix(GPIO_NUM_6);
     MatrixAnimator<LedMatrix> animator{ matrix };
+    FramepixServer framepixServer{
+        httpServer, matrix, animator, provisioningWeb
+    };
 
-    FramepixServer framepixServer{ httpServer, matrix, animator };
-
-    WifiProvisioningWeb provisioningWeb{ manager, httpServer, spiffs };
     bool provisioningApplied = false;
     if (provisioningWeb.checkForPreviousProvisioning())
     {
         ESP_LOGI(TAG, "Found previous provisioning");
-        if (provisioningWeb.applyPreviousProvisioning())
+        if (provisioningWeb.applyPreviousProvisioning(
+                [&framepixServer]() { framepixServer.start(); }))
         {
-            ESP_LOGI(TAG, "Applied previous provisioning");
+            ESP_LOGI(TAG, "Applying previous provisioning");
             provisioningApplied = true;
-            framepixServer.start();
         }
         else
         {

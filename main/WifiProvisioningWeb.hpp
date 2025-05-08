@@ -53,7 +53,10 @@ public:
         OnProvisionFailed onProvisionFailed = nullptr);
     void stop();
     bool checkForPreviousProvisioning();
-    bool applyPreviousProvisioning();
+    bool applyPreviousProvisioning(
+        OnProvisioned onProvisioned = nullptr,
+        OnProvisionFailed onProvisionFailed = nullptr);
+    bool removePreviousProvisioning();
 
 private:
     void configureHttpServer();
@@ -76,6 +79,7 @@ private:
 
     WifiCredentials apCredentials_;
     WifiCredentials stationCredentials_;
+    bool checkingStoredCredentials_{ false };
 
     static constexpr const char* wifiCredentialsFile{ "wificreds.bin" };
 

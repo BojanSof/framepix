@@ -1,4 +1,5 @@
 const MATRIX_SIZE = 16;
+const resetBtn = document.getElementById('resetBtn');
 const matrixEl = document.getElementById('matrix');
 const colorPicker = document.getElementById('colorPicker');
 const clearBtn = document.getElementById('clearBtn');
@@ -149,6 +150,14 @@ document.getElementById("bucketTool").addEventListener("click", () => {
   document.getElementById('bucketTool').classList.add('selected');
   document.getElementById('eraserTool').classList.remove('selected');
   document.getElementById('painterTool').classList.remove('selected');
+});
+
+resetBtn.addEventListener('click', () => {
+  fetch('/reset', {
+    method: 'POST'
+  })
+  .then(res => res.ok ? console.log("Reset initiated") : console.error("Reset failed"))
+  .catch(console.error);
 });
 
 // Toggle dark theme.

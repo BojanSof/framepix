@@ -1,4 +1,5 @@
 #include "FramepixServer.hpp"
+#include "esp_system.h"
 
 #include <cJSON.h>
 
@@ -19,10 +20,12 @@ extern const uint8_t jszip_end[] asm("_binary_jszip_min_js_end");
 FramepixServer::FramepixServer(
     HttpServer& httpServer,
     LedMatrix& ledMatrix,
-    MatrixAnimator<LedMatrix>& animator)
+    MatrixAnimator<LedMatrix>& animator,
+    WifiProvisioningWeb& wifiProvisioningWeb)
     : httpServer_{ httpServer }
     , ledMatrix_{ ledMatrix }
     , animator_{ animator }
+    , wifiProvisioningWeb_{ wifiProvisioningWeb }
     , framepixPageUri_{ "/",
                         HTTP_GET,
                         [](HttpRequest req) -> HttpResponse
@@ -166,116 +169,159 @@ FramepixServer::FramepixServer(
 
                               return response;
                           } }
-    , framepixAnimationUri_{
-        "/animation",
+    , framepixAnimationUri_{ "/animation",
+                             HTTP_POST,
+                             [this](HttpRequest req) -> HttpResponse
+                             {
+                                 HttpResponse response(req);
+                                 const auto content = req.getContent();
+                                 if (content.empty())
+                                 {
+                                     ESP_LOGW(TAG, "Invalid Request Content");
+                                     response.setStatus("400 Bad Request");
+                                     response.setContent(
+                                         "Invalid request content",
+                                         "text/plain");
+                                     return response;
+                                 }
+
+                                 // 2. Parse JSON
+                                 cJSON* root = cJSON_Parse(content.c_str());
+                                 if (!root)
+                                 {
+                                     ESP_LOGW(TAG, "Invalid Request Content");
+                                     response.setStatus("400 Bad Request");
+                                     response.setContent(
+                                         "Invalid request JSON", "text/plain");
+                                     return response;
+                                 }
+
+                                 // 3. interval_ms
+                                 cJSON* intervalItem
+                                     = cJSON_GetObjectItem(root, "interval_ms");
+                                 if (!cJSON_IsNumber(intervalItem)
+                                     || intervalItem->valueint <= 0)
+                                 {
+                                     ESP_LOGW(
+                                         TAG,
+                                         "Invalid Request Content (interval "
+                                         "ms)");
+                                     cJSON_Delete(root);
+                                     response.setStatus("400 Bad Request");
+                                     response.setContent(
+                                         "Invalid request JSON", "text/plain");
+                                     return response;
+                                 }
+                                 int intervalMs = intervalItem->valueint;
+
+                                 // 4. frames array
+                                 cJSON* framesItem
+                                     = cJSON_GetObjectItem(root, "frames");
+                                 if (!cJSON_IsArray(framesItem))
+                                 {
+                                     ESP_LOGW(
+                                         TAG,
+                                         "Invalid Request Content (frames)");
+                                     cJSON_Delete(root);
+                                     response.setStatus("400 Bad Request");
+                                     response.setContent(
+                                         "Invalid request JSON", "text/plain");
+                                     return response;
+                                 }
+
+                                 // Prepare container
+                                 using RGB = LedMatrix::RGB;
+                                 constexpr size_t N = LedMatrix::numPixels;
+                                 std::vector<
+                                     std::array<RGB, N>,
+                                     MatrixAnimator<LedMatrix>::VectorAllocator>
+                                     framesVec;
+                                 framesVec.reserve(
+                                     cJSON_GetArraySize(framesItem));
+
+                                 // 5. Iterate frames
+                                 for (int i = 0;
+                                      i < cJSON_GetArraySize(framesItem);
+                                      ++i)
+                                 {
+                                     cJSON* frameArr
+                                         = cJSON_GetArrayItem(framesItem, i);
+                                     if (!cJSON_IsArray(frameArr)
+                                         || cJSON_GetArraySize(frameArr) != N)
+                                     {
+                                         ESP_LOGW(
+                                             TAG,
+                                             "Skipping invalid frame %d",
+                                             i);
+                                         continue;
+                                     }
+                                     std::array<RGB, N> framePixels{};
+                                     for (size_t j = 0; j < N; ++j)
+                                     {
+                                         cJSON* colItem
+                                             = cJSON_GetArrayItem(frameArr, j);
+                                         const char* hex
+                                             = cJSON_GetStringValue(colItem);
+                                         if (!hex || strlen(hex) != 7
+                                             || hex[0] != '#')
+                                         {
+                                             // default to black
+                                             framePixels[j] = { 0, 0, 0 };
+                                         }
+                                         else
+                                         {
+                                             uint8_t r, g, b;
+                                             sscanf(
+                                                 hex + 1,
+                                                 "%02hhx%02hhx%02hhx",
+                                                 &r,
+                                                 &g,
+                                                 &b);
+                                             framePixels[j] = { r, g, b };
+                                         }
+                                     }
+                                     framesVec.push_back(framePixels);
+                                 }
+
+                                 cJSON_Delete(root);
+
+                                 if (framesVec.empty())
+                                 {
+                                     ESP_LOGW(TAG, "No frames data");
+                                     response.setStatus("400 Bad Request");
+                                     response.setContent(
+                                         "No frames data", "text/plain");
+                                     return response;
+                                 }
+
+                                 ESP_LOGI(
+                                     TAG,
+                                     "Received %d frames @ %d ms interval",
+                                     (int)framesVec.size(),
+                                     intervalMs);
+
+                                 // 6. Start animation
+                                 animator_.start(
+                                     std::move(framesVec), intervalMs);
+
+                                 response.setStatus("200 OK");
+                                 response.setContent(
+                                     "Animation successful", "text/plain");
+                                 return response;
+                             } }
+    , framepixResetUri_{
+        "/reset",
         HTTP_POST,
-        [this](HttpRequest req) -> HttpResponse
+        [&wifiProvisioningWeb](HttpRequest req) -> HttpResponse
         {
             HttpResponse response(req);
-            const auto content = req.getContent();
-            if (content.empty())
-            {
-                ESP_LOGW(TAG, "Invalid Request Content");
-                response.setStatus("400 Bad Request");
-                response.setContent("Invalid request content", "text/plain");
-                return response;
-            }
-
-            // 2. Parse JSON
-            cJSON* root = cJSON_Parse(content.c_str());
-            if (!root)
-            {
-                ESP_LOGW(TAG, "Invalid Request Content");
-                response.setStatus("400 Bad Request");
-                response.setContent("Invalid request JSON", "text/plain");
-                return response;
-            }
-
-            // 3. interval_ms
-            cJSON* intervalItem = cJSON_GetObjectItem(root, "interval_ms");
-            if (!cJSON_IsNumber(intervalItem) || intervalItem->valueint <= 0)
-            {
-                ESP_LOGW(TAG, "Invalid Request Content (interval ms)");
-                cJSON_Delete(root);
-                response.setStatus("400 Bad Request");
-                response.setContent("Invalid request JSON", "text/plain");
-                return response;
-            }
-            int intervalMs = intervalItem->valueint;
-
-            // 4. frames array
-            cJSON* framesItem = cJSON_GetObjectItem(root, "frames");
-            if (!cJSON_IsArray(framesItem))
-            {
-                ESP_LOGW(TAG, "Invalid Request Content (frames)");
-                cJSON_Delete(root);
-                response.setStatus("400 Bad Request");
-                response.setContent("Invalid request JSON", "text/plain");
-                return response;
-            }
-
-            // Prepare container
-            using RGB = LedMatrix::RGB;
-            constexpr size_t N = LedMatrix::numPixels;
-            std::vector<
-                std::array<RGB, N>,
-                MatrixAnimator<LedMatrix>::VectorAllocator>
-                framesVec;
-            framesVec.reserve(cJSON_GetArraySize(framesItem));
-
-            // 5. Iterate frames
-            for (int i = 0; i < cJSON_GetArraySize(framesItem); ++i)
-            {
-                cJSON* frameArr = cJSON_GetArrayItem(framesItem, i);
-                if (!cJSON_IsArray(frameArr)
-                    || cJSON_GetArraySize(frameArr) != N)
-                {
-                    ESP_LOGW(TAG, "Skipping invalid frame %d", i);
-                    continue;
-                }
-                std::array<RGB, N> framePixels{};
-                for (size_t j = 0; j < N; ++j)
-                {
-                    cJSON* colItem = cJSON_GetArrayItem(frameArr, j);
-                    const char* hex = cJSON_GetStringValue(colItem);
-                    if (!hex || strlen(hex) != 7 || hex[0] != '#')
-                    {
-                        // default to black
-                        framePixels[j] = { 0, 0, 0 };
-                    }
-                    else
-                    {
-                        uint8_t r, g, b;
-                        sscanf(hex + 1, "%02hhx%02hhx%02hhx", &r, &g, &b);
-                        framePixels[j] = { r, g, b };
-                    }
-                }
-                framesVec.push_back(framePixels);
-            }
-
-            cJSON_Delete(root);
-
-            if (framesVec.empty())
-            {
-                ESP_LOGW(TAG, "No frames data");
-                response.setStatus("400 Bad Request");
-                response.setContent("No frames data", "text/plain");
-                return response;
-            }
-
-            ESP_LOGI(
-                TAG,
-                "Received %d frames @ %d ms interval",
-                (int)framesVec.size(),
-                intervalMs);
-
-            // 6. Start animation
-            animator_.start(std::move(framesVec), intervalMs);
-
+            wifiProvisioningWeb.removePreviousProvisioning();
+            esp_restart();
             response.setStatus("200 OK");
-            response.setContent("Animation successful", "text/plain");
+            response.setContent("Reset successful", "text/plain");
             return response;
         }
+
     }
 {
 }
@@ -289,6 +335,7 @@ void FramepixServer::start()
     httpServer_.registerUri(jszipUri_);
     httpServer_.registerUri(framepixMatrixUri_);
     httpServer_.registerUri(framepixAnimationUri_);
+    httpServer_.registerUri(framepixResetUri_);
     ESP_LOGI(TAG, "Framepix server started");
 }
 

@@ -43,13 +43,6 @@ header img {
   width: 100px;
   margin-right: 10px;
 }
-/* Dark/light toggle button in top right */
-.theme-toggle {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  z-index: 10;
-}
 
 /* Controls */
 .controls {
