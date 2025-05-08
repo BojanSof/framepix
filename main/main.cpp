@@ -7,16 +7,18 @@
 #include <esp_wifi.h>
 #include <nvs_flash.h>
 
+#include <mdns.h>
+
 #include "HttpServer.hpp"
 #include "WifiManager.hpp"
 
 #include "Spiffs.hpp"
 
-#include "WifiProvisioningWeb.hpp"
-
 #include "FramepixServer.hpp"
 #include "LedMatrix.hpp"
 #include "MatrixAnimator.hpp"
+
+#include "WifiProvisioningWeb.hpp"
 
 #define TAG "framepix"
 
@@ -51,6 +53,12 @@ extern "C" void app_main()
             static_cast<int>(res.error()));
         return;
     }
+
+    // Initialize mDNS
+    ESP_ERROR_CHECK(mdns_init());
+    ESP_ERROR_CHECK(mdns_hostname_set("framepix"));
+    ESP_ERROR_CHECK(mdns_instance_name_set("FramePix"));
+    ESP_ERROR_CHECK(mdns_service_add(nullptr, "_http", "_tcp", 80, nullptr, 0));
 
     /* Initialize WiFi */
     using namespace EspWifiManager;
