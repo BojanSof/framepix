@@ -69,6 +69,11 @@ extern "C" void app_main()
     WifiProvisioningWeb provisioningWeb{ manager, httpServer, spiffs };
 
     LedMatrix matrix(GPIO_NUM_6);
+    if (!matrix.init())
+    {
+        ESP_LOGE(TAG, "Failed to initialize LED matrix");
+        return;
+    }
     MatrixAnimator<LedMatrix> animator{ matrix };
     FramepixServer framepixServer{
         httpServer, matrix, animator, provisioningWeb

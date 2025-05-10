@@ -1,12 +1,33 @@
 #include "LedMatrix.hpp"
-#include <esp_err.h>
+#include "led_strip_encoder.h"
 
-// Constructor
+#include <esp_err.h>
+#include <esp_log.h>
+
+#include "freertos/FreeRTOS.h"
+
 template<uint16_t Width, uint16_t Height, bool Serpentine>
 WS2812Matrix<Width, Height, Serpentine>::WS2812Matrix(gpio_num_t gpio)
     : gpio_(gpio)
 {
+}
+
+template<uint16_t Width, uint16_t Height, bool Serpentine>
+WS2812Matrix<Width, Height, Serpentine>::~WS2812Matrix()
+{
+    rmt_del_encoder(rmtEncoder_);
+    if (rmtChannel_)
+    {
+        rmt_disable(rmtChannel_);
+        rmt_del_channel(rmtChannel_);
+    }
+}
+
+template<uint16_t Width, uint16_t Height, bool Serpentine>
+bool WS2812Matrix<Width, Height, Serpentine>::init()
+{
     static constexpr uint32_t resolution = 10'000'000;  // 10 MHz
+
     rmt_tx_channel_config_t txConfig = {
         .gpio_num = gpio_,
         .clk_src = RMT_CLK_SRC_DEFAULT,
@@ -20,23 +41,31 @@ WS2812Matrix<Width, Height, Serpentine>::WS2812Matrix(gpio_num_t gpio)
                   .io_od_mode = false,
                   .allow_pd = false },
     };
-    ESP_ERROR_CHECK(rmt_new_tx_channel(&txConfig, &rmtChannel_));
+
+    esp_err_t err = rmt_new_tx_channel(&txConfig, &rmtChannel_);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(
+            TAG, "Failed to create RMT TX channel: %s", esp_err_to_name(err));
+        return false;
+    }
 
     led_strip_encoder_config_t encoder_config{ .resolution = resolution };
-    ESP_ERROR_CHECK(rmt_new_led_strip_encoder(&encoder_config, &rmtEncoder_));
-    ESP_ERROR_CHECK(rmt_enable(rmtChannel_));
-}
-
-// Destructor
-template<uint16_t Width, uint16_t Height, bool Serpentine>
-WS2812Matrix<Width, Height, Serpentine>::~WS2812Matrix()
-{
-    rmt_del_encoder(rmtEncoder_);
-    if (rmtChannel_)
+    err = rmt_new_led_strip_encoder(&encoder_config, &rmtEncoder_);
+    if (err != ESP_OK)
     {
-        rmt_disable(rmtChannel_);
-        rmt_del_channel(rmtChannel_);
+        ESP_LOGE(TAG, "Failed to create RMT encoder: %s", esp_err_to_name(err));
+        return false;
     }
+
+    err = rmt_enable(rmtChannel_);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to enable RMT channel: %s", esp_err_to_name(err));
+        return false;
+    }
+
+    return true;
 }
 
 template<uint16_t Width, uint16_t Height, bool Serpentine>
@@ -87,19 +116,36 @@ void WS2812Matrix<Width, Height, Serpentine>::clear()
 }
 
 template<uint16_t Width, uint16_t Height, bool Serpentine>
-void WS2812Matrix<Width, Height, Serpentine>::update()
+bool WS2812Matrix<Width, Height, Serpentine>::update()
 {
     rmt_transmit_config_t tx_cfg = {
         .loop_count = 0,
         .flags = { .eot_level = false, .queue_nonblocking = false }
     };
-    ESP_ERROR_CHECK(rmt_transmit(
+
+    esp_err_t err = rmt_transmit(
         rmtChannel_,
         rmtEncoder_,
         reinterpret_cast<const uint8_t*>(pixels_.data()),
         pixels_.size(),
-        &tx_cfg));
-    ESP_ERROR_CHECK(rmt_tx_wait_all_done(rmtChannel_, portMAX_DELAY));
+        &tx_cfg);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to transmit RMT data: %s", esp_err_to_name(err));
+        return false;
+    }
+
+    err = rmt_tx_wait_all_done(rmtChannel_, portMAX_DELAY);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(
+            TAG,
+            "Timeout or error waiting for RMT transmission to complete: %s",
+            esp_err_to_name(err));
+        return false;
+    }
+
+    return true;
 }
 
 template<uint16_t Width, uint16_t Height, bool Serpentine>

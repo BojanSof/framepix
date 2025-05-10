@@ -1,9 +1,6 @@
 #ifndef LED_MATRIX_HPP
 #define LED_MATRIX_HPP
 
-#include "freertos/FreeRTOS.h"
-#include "led_strip_encoder.h"
-#include "portmacro.h"
 #include <array>
 #include <driver/rmt_tx.h>
 #include <esp_log.h>
@@ -16,6 +13,9 @@
 template<uint16_t Width, uint16_t Height, bool Serpentine = true>
 class WS2812Matrix
 {
+private:
+    inline static constexpr const char* TAG = "WS2812Matrix";
+
 public:
     static constexpr size_t numPixels = Width * Height;
 
@@ -27,11 +27,13 @@ public:
     explicit WS2812Matrix(gpio_num_t gpio);
     ~WS2812Matrix();
 
+    bool init();
+
     void setPixel(uint16_t x, uint16_t y, RGB color);
     void setAllPixels(const std::array<RGB, numPixels>& pixels);
     void fill(RGB color);
     void clear();
-    void update();
+    bool update();
 
 private:
     size_t index(uint16_t x, uint16_t y) const;
@@ -49,4 +51,3 @@ using LedMatrix = WS2812Matrix<16, 16, true>;
 extern template class WS2812Matrix<16, 16, true>;
 
 #endif  // LED_MATRIX_HPP
-
