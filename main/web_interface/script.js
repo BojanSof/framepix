@@ -316,6 +316,9 @@ function transformImageToLEDMatrix(image) {
       }
     }
   }
+  // Update the animations related stuff
+  animationFrames[selectedFrameIndex] = captureState();
+  renderFrameTimeline();
 }
 
 function importImage(event) {
