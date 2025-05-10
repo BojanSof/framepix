@@ -11,15 +11,29 @@ namespace EspHttpServer
 class HttpServer
 {
 public:
-    esp_err_t start(uint16_t port = 80);
-    esp_err_t stop();
+    enum class Error
+    {
+        None = 0,
+        AlreadyRunning,
+        StartFailed,
+        StopFailed,
+        NotRunning,
+        RegisterUriFailed,
+        UnregisterUriFailed,
+        InvalidHandle,
+        Unknown
+    };
+
+public:
+    Error start(uint16_t port = 80);
+    Error stop();
 
     bool isRunning() const { return running_; }
 
     httpd_handle_t& getNativeHandle() { return server_; }
 
-    esp_err_t registerUri(HttpUri& uri);
-    esp_err_t unregisterUri(HttpUri& uri);
+    Error registerUri(HttpUri& uri);
+    Error unregisterUri(HttpUri& uri);
 
 private:
     httpd_handle_t server_;

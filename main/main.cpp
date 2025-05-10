@@ -103,7 +103,6 @@ extern "C" void app_main()
 
     while (1)
     {
-        /*ESP_LOGI(TAG, "Provisioning example");*/
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 }

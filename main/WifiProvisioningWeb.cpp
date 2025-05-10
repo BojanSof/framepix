@@ -243,7 +243,7 @@ bool WifiProvisioningWeb::removePreviousProvisioning()
 
 void WifiProvisioningWeb::configureHttpServer()
 {
-    ESP_ERROR_CHECK(httpServer_.start());
+    httpServer_.start();
     httpServer_.registerUri(wifiSignInPageUri_);
     httpServer_.registerUri(wifiSignInPageCssUri_);
     httpServer_.registerUri(wifiConnectUri_);
@@ -259,7 +259,7 @@ void WifiProvisioningWeb::deconfigureHttpServer()
 {
     if (httpServer_.isRunning())
     {
-        ESP_ERROR_CHECK(httpServer_.stop());
+        httpServer_.stop();
     }
 }
 
