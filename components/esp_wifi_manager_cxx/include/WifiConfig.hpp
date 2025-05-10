@@ -33,12 +33,12 @@ public:
     }
 
     virtual ~WifiConfig() = default;
-    virtual void apply() = 0;
-    virtual void disable() = 0;
+    virtual bool apply() = 0;
+    virtual bool disable() = 0;
 
     WifiMode getMode() const { return mode_; }
 
-    virtual void run() { }
+    virtual bool run() { return true; }
 
 protected:
     wifi_config_t config_{};
@@ -67,71 +67,128 @@ public:
         , onDeviceConnected_{ onDeviceConnected }
         , onDeviceDisconnected_{ onDeviceDisconnected }
     {
-        const size_t userSsidLen = ssid.size();
-        const size_t maxSsidLen
-            = sizeof(config_.ap.ssid) / sizeof(config_.ap.ssid[0]);
-        const size_t ssidLen
-            = (userSsidLen < maxSsidLen) ? userSsidLen : maxSsidLen;
+        const size_t ssidLen = std::min(ssid.size(), sizeof(config_.ap.ssid));
         strncpy(reinterpret_cast<char*>(config_.ap.ssid), ssid.data(), ssidLen);
-
         config_.ap.ssid_len = ssidLen;
 
-        const size_t userPassLen = pass.size();
-        const size_t maxPassLen
-            = sizeof(config_.ap.password) / sizeof(config_.ap.password[0]);
         const size_t passLen
-            = (userPassLen < maxPassLen) ? userPassLen : maxPassLen;
+            = std::min(pass.size(), sizeof(config_.ap.password));
         strncpy(
             reinterpret_cast<char*>(config_.ap.password), pass.data(), passLen);
 
         config_.ap.channel = channel;
-
         config_.ap.max_connection = numConnections;
-
         config_.ap.authmode
             = (passLen == 0) ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA2_PSK;
-
         config_.ap.pmf_cfg.required = true;
     }
 
-    virtual void apply() override
+    virtual bool apply() override
     {
-        // register event handlers
-        ESP_ERROR_CHECK(esp_event_handler_instance_register(
+        esp_err_t err;
+
+        err = esp_event_handler_instance_register(
             WIFI_EVENT,
             ESP_EVENT_ANY_ID,
             &eventHandler,
             this,
-            &wifiEventHandlerInstance_));
-        ESP_ERROR_CHECK(esp_event_handler_instance_register(
+            &wifiEventHandlerInstance_);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(
+                TAG,
+                "Failed to register event handler: %s",
+                esp_err_to_name(err));
+            return false;
+        }
+
+        err = esp_event_handler_instance_register(
             IP_EVENT,
             ESP_EVENT_ANY_ID,
             &eventHandler,
             this,
-            &ipEventHandlerInstance_));
-        // set the mode to AP and set the configuration
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &config_));
+            &ipEventHandlerInstance_);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(
+                TAG,
+                "Failed to register IP event handler: %s",
+                esp_err_to_name(err));
+            return false;
+        }
+
+        err = esp_wifi_set_mode(WIFI_MODE_AP);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to set wifi mode: %s", esp_err_to_name(err));
+            return false;
+        }
+
+        err = esp_wifi_set_config(WIFI_IF_AP, &config_);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(
+                TAG, "Failed to set wifi AP config: %s", esp_err_to_name(err));
+            return false;
+        }
+
+        ESP_LOGI(TAG, "AP configuration applied successfully.");
+        return true;
     }
 
-    virtual void disable() override
+    virtual bool disable() override
     {
-        // unregister event handlers
-        ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            WIFI_EVENT, ESP_EVENT_ANY_ID, wifiEventHandlerInstance_));
-        ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            IP_EVENT, ESP_EVENT_ANY_ID, ipEventHandlerInstance_));
-        // disable the AP mode by changing the mode to STA or NULL
+        esp_err_t err;
+
+        err = esp_event_handler_instance_unregister(
+            WIFI_EVENT, ESP_EVENT_ANY_ID, wifiEventHandlerInstance_);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(
+                TAG,
+                "Failed to unregister wifi event handler: %s",
+                esp_err_to_name(err));
+            return false;
+        }
+
+        err = esp_event_handler_instance_unregister(
+            IP_EVENT, ESP_EVENT_ANY_ID, ipEventHandlerInstance_);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(
+                TAG,
+                "Failed to unregister IP event handler: %s",
+                esp_err_to_name(err));
+            return false;
+        }
+
         wifi_mode_t mode;
-        ESP_ERROR_CHECK(esp_wifi_get_mode(&mode));
+        err = esp_wifi_get_mode(&mode);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to get wifi mode: %s", esp_err_to_name(err));
+            return false;
+        }
+
         if (mode == WIFI_MODE_APSTA)
         {
-            ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+            err = esp_wifi_set_mode(WIFI_MODE_STA);
         }
         else
         {
-            ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
+            err = esp_wifi_set_mode(WIFI_MODE_NULL);
         }
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(
+                TAG,
+                "Failed to set wifi mode to NULL: %s",
+                esp_err_to_name(err));
+            return false;
+        }
+
+        ESP_LOGI(TAG, "Wifi AP disabled successfully.");
+        return true;
     }
 
 protected:
@@ -141,13 +198,13 @@ protected:
         int32_t event_id,
         void* event_data)
     {
-        WifiConfigAP* apConfig = (WifiConfigAP*)arg;
+        auto* apConfig = static_cast<WifiConfigAP*>(arg);
         if (event_base == WIFI_EVENT)
         {
             if (event_id == WIFI_EVENT_AP_STACONNECTED)
             {
-                wifi_event_ap_staconnected_t* event
-                    = (wifi_event_ap_staconnected_t*)event_data;
+                auto* event
+                    = static_cast<wifi_event_ap_staconnected_t*>(event_data);
                 ESP_LOGI(
                     TAG,
                     "station " MACSTR " join, AID=%d",
@@ -156,8 +213,8 @@ protected:
             }
             else if (event_id == WIFI_EVENT_AP_STADISCONNECTED)
             {
-                wifi_event_ap_stadisconnected_t* event
-                    = (wifi_event_ap_stadisconnected_t*)event_data;
+                auto* event
+                    = static_cast<wifi_event_ap_stadisconnected_t*>(event_data);
                 ESP_LOGI(
                     TAG,
                     "station " MACSTR " leave, AID=%d, reason=%d",
@@ -172,20 +229,17 @@ protected:
                 }
             }
         }
-        else if (event_base == IP_EVENT)
+        else if (
+            event_base == IP_EVENT && event_id == IP_EVENT_AP_STAIPASSIGNED)
         {
-            if (event_id == IP_EVENT_AP_STAIPASSIGNED)
+            auto* event = static_cast<ip_event_ap_staipassigned_t*>(event_data);
+            if (apConfig->onDeviceConnected_)
             {
-                ip_event_ap_staipassigned_t* event
-                    = (ip_event_ap_staipassigned_t*)event_data;
-                if (apConfig->onDeviceConnected_)
-                {
-                    std::string macClient
-                        = std::format("{}{}{}{}{}{}", MAC2STR(event->mac));
-                    std::string ipClient
-                        = std::format("{}.{}.{}.{}", IP2STR(&event->ip));
-                    apConfig->onDeviceConnected_(macClient, ipClient);
-                }
+                std::string macClient
+                    = std::format("{}{}{}{}{}{}", MAC2STR(event->mac));
+                std::string ipClient
+                    = std::format("{}.{}.{}.{}", IP2STR(&event->ip));
+                apConfig->onDeviceConnected_(macClient, ipClient);
             }
         }
     }
@@ -218,52 +272,109 @@ public:
         , onConnected_{ onConnected }
         , onDisconnected_{ onDisconnected }
     {
-        const size_t userSsidLen = ssid.size();
-        const size_t maxSsidLen = sizeof(config_.sta.ssid);
-        const size_t ssidLen
-            = (userSsidLen < maxSsidLen) ? userSsidLen : maxSsidLen;
+        const size_t ssidLen = std::min(ssid.size(), sizeof(config_.sta.ssid));
         strncpy(
             reinterpret_cast<char*>(config_.sta.ssid), ssid.data(), ssidLen);
 
-        const size_t userPassLen = pass.size();
-        const size_t maxPassLen = sizeof(config_.sta.password);
         const size_t passLen
-            = (userPassLen < maxPassLen) ? userPassLen : maxPassLen;
+            = std::min(pass.size(), sizeof(config_.sta.password));
         strncpy(
             reinterpret_cast<char*>(config_.sta.password),
             pass.data(),
             passLen);
     }
 
-    virtual void apply() override
+    virtual bool apply() override
     {
-        // register station event handlers
-        ESP_ERROR_CHECK(esp_event_handler_instance_register(
+        esp_err_t err;
+
+        err = esp_event_handler_instance_register(
             WIFI_EVENT,
             ESP_EVENT_ANY_ID,
             &eventHandler,
             this,
-            &wifiEventHandlerInstance_));
-        ESP_ERROR_CHECK(esp_event_handler_instance_register(
+            &wifiEventHandlerInstance_);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(
+                TAG,
+                "Failed to register event handler: %s",
+                esp_err_to_name(err));
+            return false;
+        }
+
+        err = esp_event_handler_instance_register(
             IP_EVENT,
             ESP_EVENT_ANY_ID,
             &eventHandler,
             this,
-            &ipEventHandlerInstance_));
-        // set mode and configuration for station
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &config_));
+            &ipEventHandlerInstance_);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(
+                TAG,
+                "Failed to register IP event handler: %s",
+                esp_err_to_name(err));
+            return false;
+        }
+
+        err = esp_wifi_set_mode(WIFI_MODE_STA);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to set wifi mode: %s", esp_err_to_name(err));
+            return false;
+        }
+
+        err = esp_wifi_set_config(WIFI_IF_STA, &config_);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(
+                TAG, "Failed to set wifi STA config: %s", esp_err_to_name(err));
+            return false;
+        }
+
+        ESP_LOGI(TAG, "Station configuration applied successfully.");
+        return true;
     }
 
-    virtual void disable() override
+    virtual bool disable() override
     {
-        // unregister event handlers
-        ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            WIFI_EVENT, ESP_EVENT_ANY_ID, wifiEventHandlerInstance_));
-        ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            IP_EVENT, ESP_EVENT_ANY_ID, ipEventHandlerInstance_));
-        // disable station mode
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
+        esp_err_t err;
+
+        err = esp_event_handler_instance_unregister(
+            WIFI_EVENT, ESP_EVENT_ANY_ID, wifiEventHandlerInstance_);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(
+                TAG,
+                "Failed to unregister wifi event handler: %s",
+                esp_err_to_name(err));
+            return false;
+        }
+
+        err = esp_event_handler_instance_unregister(
+            IP_EVENT, ESP_EVENT_ANY_ID, ipEventHandlerInstance_);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(
+                TAG,
+                "Failed to unregister IP event handler: %s",
+                esp_err_to_name(err));
+            return false;
+        }
+
+        err = esp_wifi_set_mode(WIFI_MODE_NULL);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(
+                TAG,
+                "Failed to set wifi mode to NULL: %s",
+                esp_err_to_name(err));
+            return false;
+        }
+
+        ESP_LOGI(TAG, "Wifi Station disabled successfully.");
+        return true;
     }
 
 protected:
@@ -273,7 +384,7 @@ protected:
         int32_t event_id,
         void* event_data)
     {
-        auto* staConfig = reinterpret_cast<WifiConfigStation*>(arg);
+        auto* staConfig = static_cast<WifiConfigStation*>(arg);
         if (event_base == WIFI_EVENT)
         {
             if (event_id == WIFI_EVENT_STA_START)
@@ -286,27 +397,22 @@ protected:
             }
             else if (event_id == WIFI_EVENT_STA_DISCONNECTED)
             {
-                auto* event = reinterpret_cast<wifi_event_sta_disconnected_t*>(
-                    event_data);
+                auto* event
+                    = static_cast<wifi_event_sta_disconnected_t*>(event_data);
                 ESP_LOGI(TAG, "Station disconnected from AP");
                 if (staConfig->onDisconnected_)
-                {
                     staConfig->onDisconnected_(event->reason);
-                }
             }
         }
-        else if (event_base == IP_EVENT)
+        else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
         {
-            if (event_id == IP_EVENT_STA_GOT_IP)
+            auto* event = static_cast<ip_event_got_ip_t*>(event_data);
+            ESP_LOGI(TAG, "Got IP:" IPSTR, IP2STR(&event->ip_info.ip));
+            if (staConfig->onConnected_)
             {
-                auto* event = reinterpret_cast<ip_event_got_ip_t*>(event_data);
-                ESP_LOGI(TAG, "Got IP:" IPSTR, IP2STR(&event->ip_info.ip));
-                if (staConfig->onConnected_)
-                {
-                    std::string ip = std::format(
-                        "{}.{}.{}.{}", IP2STR(&event->ip_info.ip));
-                    staConfig->onConnected_(ip);
-                }
+                std::string ip
+                    = std::format("{}.{}.{}.{}", IP2STR(&event->ip_info.ip));
+                staConfig->onConnected_(ip);
             }
         }
     }
@@ -326,7 +432,6 @@ private:
     inline static constexpr const char* TAG = "WifiConfigAPandStation";
 
 public:
-    // Constructor combines the parameters for both AP and STA.
     WifiConfigAPandStation(
         std::string_view apSsid,
         std::string_view apPass,
@@ -350,55 +455,108 @@ public:
     {
     }
 
-    virtual void apply() override
+    virtual bool apply() override
     {
-        // register AP events
-        ESP_ERROR_CHECK(esp_event_handler_instance_register(
-            WIFI_EVENT,
-            ESP_EVENT_ANY_ID,
-            &WifiConfigAP::eventHandler,
-            this,
-            &apWifiEventHandlerInstance_));
-        ESP_ERROR_CHECK(esp_event_handler_instance_register(
-            IP_EVENT,
-            ESP_EVENT_ANY_ID,
-            &WifiConfigAP::eventHandler,
-            this,
-            &apIpEventHandlerInstance_));
-        // register STA events
-        ESP_ERROR_CHECK(esp_event_handler_instance_register(
-            WIFI_EVENT,
-            ESP_EVENT_ANY_ID,
-            &WifiConfigStation::eventHandler,
-            this,
-            &staWifiEventHandlerInstance_));
-        ESP_ERROR_CHECK(esp_event_handler_instance_register(
-            IP_EVENT,
-            ESP_EVENT_ANY_ID,
-            &WifiConfigStation::eventHandler,
-            this,
-            &staIpEventHandlerInstance_));
+        if (esp_event_handler_instance_register(
+                WIFI_EVENT,
+                ESP_EVENT_ANY_ID,
+                &WifiConfigAP::eventHandler,
+                this,
+                &apWifiEventHandlerInstance_)
+            != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register AP WiFi event handler");
+            return false;
+        }
+        if (esp_event_handler_instance_register(
+                IP_EVENT,
+                ESP_EVENT_ANY_ID,
+                &WifiConfigAP::eventHandler,
+                this,
+                &apIpEventHandlerInstance_)
+            != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register AP IP event handler");
+            return false;
+        }
+        if (esp_event_handler_instance_register(
+                WIFI_EVENT,
+                ESP_EVENT_ANY_ID,
+                &WifiConfigStation::eventHandler,
+                this,
+                &staWifiEventHandlerInstance_)
+            != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register STA WiFi event handler");
+            return false;
+        }
+        if (esp_event_handler_instance_register(
+                IP_EVENT,
+                ESP_EVENT_ANY_ID,
+                &WifiConfigStation::eventHandler,
+                this,
+                &staIpEventHandlerInstance_)
+            != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register STA IP event handler");
+            return false;
+        }
 
-        // set mode to APSTA
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
-        // set configuration for both interfaces
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &config_));
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &config_));
+        if (esp_wifi_set_mode(WIFI_MODE_APSTA) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to set mode to WIFI_MODE_APSTA");
+            return false;
+        }
+        if (esp_wifi_set_config(WIFI_IF_AP, &config_) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to set AP config");
+            return false;
+        }
+        if (esp_wifi_set_config(WIFI_IF_STA, &config_) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to set STA config");
+            return false;
+        }
+        return true;
     }
 
-    virtual void disable() override
+    virtual bool disable() override
     {
-        // unregister all event handlers
-        ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            WIFI_EVENT, ESP_EVENT_ANY_ID, apWifiEventHandlerInstance_));
-        ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            IP_EVENT, ESP_EVENT_ANY_ID, apIpEventHandlerInstance_));
-        ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            WIFI_EVENT, ESP_EVENT_ANY_ID, staWifiEventHandlerInstance_));
-        ESP_ERROR_CHECK(esp_event_handler_instance_unregister(
-            IP_EVENT, ESP_EVENT_ANY_ID, staIpEventHandlerInstance_));
-        // set mode to NULL
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
+        if (esp_event_handler_instance_unregister(
+                WIFI_EVENT, ESP_EVENT_ANY_ID, apWifiEventHandlerInstance_)
+            != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to unregister AP WiFi event handler");
+            return false;
+        }
+        if (esp_event_handler_instance_unregister(
+                IP_EVENT, ESP_EVENT_ANY_ID, apIpEventHandlerInstance_)
+            != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to unregister AP IP event handler");
+            return false;
+        }
+        if (esp_event_handler_instance_unregister(
+                WIFI_EVENT, ESP_EVENT_ANY_ID, staWifiEventHandlerInstance_)
+            != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to unregister STA WiFi event handler");
+            return false;
+        }
+        if (esp_event_handler_instance_unregister(
+                IP_EVENT, ESP_EVENT_ANY_ID, staIpEventHandlerInstance_)
+            != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to unregister STA IP event handler");
+            return false;
+        }
+
+        if (esp_wifi_set_mode(WIFI_MODE_NULL) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to set mode to WIFI_MODE_NULL");
+            return false;
+        }
+        return true;
     }
 
 private:
@@ -429,27 +587,55 @@ public:
     {
     }
 
-    virtual void apply() override
+    virtual bool apply() override
     {
-        esp_event_handler_instance_register(
-            WIFI_EVENT,
-            WIFI_EVENT_SCAN_DONE,
-            &scanDoneHandler,
-            this,
-            &scanDoneHandlerInstance_);
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &config_));
+        if (esp_event_handler_instance_register(
+                WIFI_EVENT,
+                WIFI_EVENT_SCAN_DONE,
+                &scanDoneHandler,
+                this,
+                &scanDoneHandlerInstance_)
+            != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register scan done handler");
+            return false;
+        }
+
+        if (esp_wifi_set_mode(WIFI_MODE_STA) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to set mode to WIFI_MODE_STA");
+            return false;
+        }
+
+        if (esp_wifi_set_config(WIFI_IF_STA, &config_) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to set STA config");
+            return false;
+        }
+
+        return true;
     }
 
-    virtual void disable() override
+    virtual bool disable() override
     {
-        esp_event_handler_instance_unregister(
-            WIFI_EVENT, WIFI_EVENT_SCAN_DONE, scanDoneHandlerInstance_);
+        if (esp_event_handler_instance_unregister(
+                WIFI_EVENT, WIFI_EVENT_SCAN_DONE, scanDoneHandlerInstance_)
+            != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to unregister scan done handler");
+            return false;
+        }
+        return true;
     }
 
-    virtual void run() override
+    virtual bool run() override
     {
-        ESP_ERROR_CHECK(esp_wifi_scan_start(nullptr, false));
+        if (esp_wifi_scan_start(nullptr, false) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to start WiFi scan");
+            return false;
+        }
+        return true;
     }
 
 private:
@@ -474,7 +660,13 @@ private:
         WifiConfigScanner* config = static_cast<WifiConfigScanner*>(arg);
         uint16_t numNetworks = 10;
         wifi_ap_record_t apRecords[10];
-        ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&numNetworks, apRecords));
+
+        if (esp_wifi_scan_get_ap_records(&numNetworks, apRecords) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to get scan results");
+            vTaskDelete(nullptr);
+            return;
+        }
 
         std::vector<WifiNetwork> scanResults;
         for (int i = 0; i < numNetworks; i++)
@@ -491,6 +683,7 @@ private:
         {
             config->onScanDone_(scanResults);
         }
+
         vTaskDelete(nullptr);
     }
 
@@ -499,5 +692,7 @@ private:
     esp_event_handler_instance_t scanDoneHandlerInstance_{};
     TaskHandle_t processScanResultsHandle_ = nullptr;
 };
-}
-#endif  //_ESP_WIFI_MANAGER_CXX_WIFI_CONFIG_HPP
+
+}  // namespace EspWifiManager
+
+#endif  // _ESP_WIFI_MANAGER_CXX_WIFI_CONFIG_HPP

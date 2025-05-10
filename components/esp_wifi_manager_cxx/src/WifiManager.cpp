@@ -15,7 +15,8 @@ WifiManager::WifiManager(std::unique_ptr<WifiConfig> config)
     {
         setupNetif();
         config_->apply();
-        ESP_ERROR_CHECK(esp_wifi_start());
+        esp_wifi_start();
+        esp_wifi_set_ps(WIFI_PS_NONE);
         config_->run();
     }
 }
@@ -25,7 +26,7 @@ WifiManager::~WifiManager()
     if (config_)
     {
         config_->disable();
-        ESP_ERROR_CHECK(esp_wifi_stop());
+        esp_wifi_stop();
         cleanupNetif();
     }
 
@@ -40,7 +41,7 @@ void WifiManager::setConfig(std::unique_ptr<WifiConfig> config)
     if (config_)
     {
         config_->disable();
-        ESP_ERROR_CHECK(esp_wifi_stop());
+        esp_wifi_stop();
         cleanupNetif();
     }
     if (config)
@@ -48,7 +49,8 @@ void WifiManager::setConfig(std::unique_ptr<WifiConfig> config)
         config_ = std::move(config);
         setupNetif();
         config_->apply();
-        ESP_ERROR_CHECK(esp_wifi_start());
+        esp_wifi_start();
+        esp_wifi_set_ps(WIFI_PS_NONE);
         config_->run();
     }
     else
@@ -71,8 +73,7 @@ void WifiManager::initWifi()
     ESP_LOGI(TAG, "Initializing WiFi...");
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-    /*ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));*/
+    esp_wifi_init(&cfg);
 
     wifiInitialized_ = true;
 }
@@ -80,7 +81,7 @@ void WifiManager::initWifi()
 void WifiManager::deinitWifi()
 {
     ESP_LOGI(TAG, "Deinitializing WiFi...");
-    ESP_ERROR_CHECK(esp_wifi_deinit());
+    esp_wifi_deinit();
     wifiInitialized_ = false;
 }
 
