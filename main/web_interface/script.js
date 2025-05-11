@@ -90,7 +90,7 @@ function applyState(state) {
       if (state[row][col]) {
         // ensure state is in hex format
         const hex = rgba2hex(state[row][col]);
-        cell.dataset.actualColor = scaleColorForLED(hex);
+        cell.dataset.actualColor = rgba2hex(scaleColorForLED(hex));
       } else {
         delete cell.dataset.actualColor;
       }
@@ -216,7 +216,7 @@ function createMatrix() {
 function applyTool(innerDiv) {
   if (currentTool === "painter") {
     const originalHex = colorPicker.value; 
-    const scaledHex = scaleColorForLED(originalHex);
+    const scaledHex = rgba2hex(scaleColorForLED(originalHex));
     const previewHex = originalHex;
     innerDiv.style.backgroundColor = previewHex;
     innerDiv.dataset.actualColor = scaledHex;
@@ -225,7 +225,7 @@ function applyTool(innerDiv) {
     delete innerDiv.dataset.actualColor;
   } else if (currentTool === "bucket") {
     const originalHex = colorPicker.value;
-    const scaledHex = scaleColorForLED(originalHex);
+    const scaledHex = rgba2hex(scaleColorForLED(originalHex));
     const previewHex = originalHex;
 
     const targetColor = innerDiv.dataset.actualColor || "";
@@ -271,7 +271,8 @@ function getMatrixDesign() {
     for (let col = 0; col < MATRIX_SIZE; col++) {
       const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"] div`);
       const color = rgba2hex(cell.style.backgroundColor || "rgb(0,0,0)");
-      design.push(color);
+      const scaled = rgba2hex(scaleColorForLED(color));
+      design.push(scaled);
     }
   }
   return design;
@@ -312,7 +313,7 @@ function transformImageToLEDMatrix(image) {
       );
       if (cell) {
         cell.style.backgroundColor = hex;
-        cell.dataset.actualColor = scaleColorForLED(hex);
+        cell.dataset.actualColor = rgba2hex(scaleColorForLED(hex));
       }
     }
   }
