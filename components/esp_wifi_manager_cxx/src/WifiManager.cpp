@@ -16,7 +16,6 @@ WifiManager::WifiManager(std::unique_ptr<WifiConfig> config)
         setupNetif();
         config_->apply();
         esp_wifi_start();
-        esp_wifi_set_ps(WIFI_PS_NONE);
         config_->run();
     }
 }
@@ -50,7 +49,6 @@ void WifiManager::setConfig(std::unique_ptr<WifiConfig> config)
         setupNetif();
         config_->apply();
         esp_wifi_start();
-        esp_wifi_set_ps(WIFI_PS_NONE);
         config_->run();
     }
     else
@@ -74,6 +72,7 @@ void WifiManager::initWifi()
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     esp_wifi_init(&cfg);
+    esp_wifi_set_ps(WIFI_PS_NONE);
 
     wifiInitialized_ = true;
 }
