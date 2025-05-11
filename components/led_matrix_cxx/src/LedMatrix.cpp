@@ -6,14 +6,28 @@
 
 #include "freertos/FreeRTOS.h"
 
-template<uint16_t Width, uint16_t Height, bool Serpentine>
-WS2812Matrix<Width, Height, Serpentine>::WS2812Matrix(gpio_num_t gpio)
+template<
+    uint16_t Width,
+    uint16_t Height,
+    bool Serpentine,
+    WS2812MatrixRotation Rotation,
+    bool MirrorX,
+    bool MirrorY>
+WS2812Matrix<Width, Height, Serpentine, Rotation, MirrorX, MirrorY>::
+    WS2812Matrix(gpio_num_t gpio)
     : gpio_(gpio)
 {
 }
 
-template<uint16_t Width, uint16_t Height, bool Serpentine>
-WS2812Matrix<Width, Height, Serpentine>::~WS2812Matrix()
+template<
+    uint16_t Width,
+    uint16_t Height,
+    bool Serpentine,
+    WS2812MatrixRotation Rotation,
+    bool MirrorX,
+    bool MirrorY>
+WS2812Matrix<Width, Height, Serpentine, Rotation, MirrorX, MirrorY>::
+    ~WS2812Matrix()
 {
     rmt_del_encoder(rmtEncoder_);
     if (rmtChannel_)
@@ -23,8 +37,14 @@ WS2812Matrix<Width, Height, Serpentine>::~WS2812Matrix()
     }
 }
 
-template<uint16_t Width, uint16_t Height, bool Serpentine>
-bool WS2812Matrix<Width, Height, Serpentine>::init()
+template<
+    uint16_t Width,
+    uint16_t Height,
+    bool Serpentine,
+    WS2812MatrixRotation Rotation,
+    bool MirrorX,
+    bool MirrorY>
+bool WS2812Matrix<Width, Height, Serpentine, Rotation, MirrorX, MirrorY>::init()
 {
     static constexpr uint32_t resolution = 10'000'000;  // 10 MHz
 
@@ -68,9 +88,15 @@ bool WS2812Matrix<Width, Height, Serpentine>::init()
     return true;
 }
 
-template<uint16_t Width, uint16_t Height, bool Serpentine>
-void WS2812Matrix<Width, Height, Serpentine>::setPixel(
-    uint16_t x, uint16_t y, RGB color)
+template<
+    uint16_t Width,
+    uint16_t Height,
+    bool Serpentine,
+    WS2812MatrixRotation Rotation,
+    bool MirrorX,
+    bool MirrorY>
+void WS2812Matrix<Width, Height, Serpentine, Rotation, MirrorX, MirrorY>::
+    setPixel(uint16_t x, uint16_t y, RGB color)
 {
     if (x < Width && y < Height)
     {
@@ -81,9 +107,15 @@ void WS2812Matrix<Width, Height, Serpentine>::setPixel(
     }
 }
 
-template<uint16_t Width, uint16_t Height, bool Serpentine>
-void WS2812Matrix<Width, Height, Serpentine>::setAllPixels(
-    const std::array<RGB, numPixels>& pixels)
+template<
+    uint16_t Width,
+    uint16_t Height,
+    bool Serpentine,
+    WS2812MatrixRotation Rotation,
+    bool MirrorX,
+    bool MirrorY>
+void WS2812Matrix<Width, Height, Serpentine, Rotation, MirrorX, MirrorY>::
+    setAllPixels(const std::array<RGB, numPixels>& pixels)
 {
     for (uint16_t y = 0; y < Height; ++y)
     {
@@ -98,8 +130,15 @@ void WS2812Matrix<Width, Height, Serpentine>::setAllPixels(
     }
 }
 
-template<uint16_t Width, uint16_t Height, bool Serpentine>
-void WS2812Matrix<Width, Height, Serpentine>::fill(RGB color)
+template<
+    uint16_t Width,
+    uint16_t Height,
+    bool Serpentine,
+    WS2812MatrixRotation Rotation,
+    bool MirrorX,
+    bool MirrorY>
+void WS2812Matrix<Width, Height, Serpentine, Rotation, MirrorX, MirrorY>::fill(
+    RGB color)
 {
     for (size_t i = 0; i < numPixels; ++i)
     {
@@ -109,14 +148,28 @@ void WS2812Matrix<Width, Height, Serpentine>::fill(RGB color)
     }
 }
 
-template<uint16_t Width, uint16_t Height, bool Serpentine>
-void WS2812Matrix<Width, Height, Serpentine>::clear()
+template<
+    uint16_t Width,
+    uint16_t Height,
+    bool Serpentine,
+    WS2812MatrixRotation Rotation,
+    bool MirrorX,
+    bool MirrorY>
+void WS2812Matrix<Width, Height, Serpentine, Rotation, MirrorX, MirrorY>::
+    clear()
 {
     fill({ 0, 0, 0 });
 }
 
-template<uint16_t Width, uint16_t Height, bool Serpentine>
-bool WS2812Matrix<Width, Height, Serpentine>::update()
+template<
+    uint16_t Width,
+    uint16_t Height,
+    bool Serpentine,
+    WS2812MatrixRotation Rotation,
+    bool MirrorX,
+    bool MirrorY>
+bool WS2812Matrix<Width, Height, Serpentine, Rotation, MirrorX, MirrorY>::
+    update()
 {
     rmt_transmit_config_t tx_cfg = {
         .loop_count = 0,
@@ -148,20 +201,84 @@ bool WS2812Matrix<Width, Height, Serpentine>::update()
     return true;
 }
 
-template<uint16_t Width, uint16_t Height, bool Serpentine>
+template<
+    uint16_t Width,
+    uint16_t Height,
+    bool Serpentine,
+    WS2812MatrixRotation Rotation,
+    bool MirrorX,
+    bool MirrorY>
 size_t
-WS2812Matrix<Width, Height, Serpentine>::index(uint16_t x, uint16_t y) const
+WS2812Matrix<Width, Height, Serpentine, Rotation, MirrorX, MirrorY>::index(
+    uint16_t x, uint16_t y) const
 {
-    y = Height - 1 - y;
+    // 1) Rotate
+    uint16_t tx = x, ty = y;
+    if constexpr (Rotation == WS2812MatrixRotation::Rot90)
+    {
+        tx = Height - 1 - y;
+        ty = x;
+    }
+    else if constexpr (Rotation == WS2812MatrixRotation::Rot180)
+    {
+        tx = Width - 1 - x;
+        ty = Height - 1 - y;
+    }
+    else if constexpr (Rotation == WS2812MatrixRotation::Rot270)
+    {
+        tx = y;
+        ty = Width - 1 - x;
+    }
+
+    // 2) Mirror
+    if constexpr (MirrorX)
+    {
+        // after 90/270 swap dims, but compile-time math still works:
+        tx
+            = ((Rotation == WS2812MatrixRotation::Rot90
+                || Rotation == WS2812MatrixRotation::Rot270)
+                   ? Height - 1 - tx
+                   : Width - 1 - tx);
+    }
+    if constexpr (MirrorY)
+    {
+        ty
+            = ((Rotation == WS2812MatrixRotation::Rot90
+                || Rotation == WS2812MatrixRotation::Rot270)
+                   ? Width - 1 - ty
+                   : Height - 1 - ty);
+    }
+
+    // 3) Serpentine / straight index
+    //    we invert y so row-0 is bottom of panel
+    constexpr uint16_t W = Width;
+    constexpr uint16_t H = Height;
+    uint16_t row = (H - 1) - ty;
+
     if constexpr (Serpentine)
     {
-        return (y % 2 == 0) ? (y * Width + x) : (y * Width + (Width - 1 - x));
+        if (row & 1)
+        {
+            // odd row ⇒ left-to-right reversed
+            return row * W + (W - 1 - tx);
+        }
+        else
+        {
+            // even row ⇒ normal
+            return row * W + tx;
+        }
     }
     else
     {
-        return y * Width + x;
+        return row * W + tx;
     }
 }
 
 // Explicit instantiation for the 16×16 serpentine matrix
-template class WS2812Matrix<16, 16, true>;
+template class WS2812Matrix<
+    16,
+    16,
+    true,
+    WS2812MatrixRotation::Rot270,
+    false,
+    false>;

@@ -5,12 +5,26 @@
 #include <driver/rmt_tx.h>
 #include <esp_log.h>
 
+enum class WS2812MatrixRotation : uint8_t
+{
+    Rot0 = 0,
+    Rot90 = 1,
+    Rot180 = 2,
+    Rot270 = 3
+};
+
 /**
  * WS2812Matrix: Template class for driving a WS2812 pixel matrix via RMT.
  * Width, Height: dimensions of the matrix.
  * Serpentine: if true, uses serpentine mapping between rows.
  */
-template<uint16_t Width, uint16_t Height, bool Serpentine = true>
+template<
+    uint16_t Width,
+    uint16_t Height,
+    bool Serpentine = true,
+    WS2812MatrixRotation Rotation = WS2812MatrixRotation::Rot0,
+    bool MirrorX = false,
+    bool MirrorY = false>
 class WS2812Matrix
 {
 private:
@@ -44,10 +58,17 @@ private:
     rmt_encoder_handle_t rmtEncoder_ = nullptr;
 };
 
-// Alias for a 16×16 serpentine matrix
-using LedMatrix = WS2812Matrix<16, 16, true>;
+// Alias for a 16×16 serpentine matrix, used in the project
+using LedMatrix
+    = WS2812Matrix<16, 16, true, WS2812MatrixRotation::Rot270, false, false>;
 
 // Explicit instantiation declaration
-extern template class WS2812Matrix<16, 16, true>;
+extern template class WS2812Matrix<
+    16,
+    16,
+    true,
+    WS2812MatrixRotation::Rot270,
+    false,
+    false>;
 
 #endif  // LED_MATRIX_HPP
