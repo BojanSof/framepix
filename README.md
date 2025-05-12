@@ -93,9 +93,14 @@ There are multiple ideas that can be implemented to make the project even better
 
 <table>
   <tr>
-    <td> Source GIF </td>
+    <td> Source Image </td>
     <td> LED matrix </td>
     <td> Source link </td>
+  </tr>
+  <tr>
+    <td> <img src="images/gallery/framepix.png"  alt="FramePix Logo" width = 300px></td>
+    <td> <img src="images/gallery/framepix-hw.jpeg"  alt="FramePix Logo on Matrix" width = 300px></td>
+    <td></td>
   </tr>
   <tr>
     <td> <img src="images/gallery/sword.gif"  alt="Sword Source GIF" width = 300px></td>
