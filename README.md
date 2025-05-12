@@ -5,7 +5,17 @@
 
 A smart LED matrix display powered by ESP32S3, featuring WiFi connectivity and web-based LED matrix animation designer.
 
-PLACEHOLDER: Put HW image here
+<table>
+  <tr>
+    <td> <img src="images/framepix-hw.jpeg"  alt="FramePix HW in action" width = 400px></td>
+    <td> <img src="images/framepix-hw1.jpeg"  alt="FramePix HW front" width = 400px></td>
+   </tr> 
+    <td> <img src="images/framepix-hw2.jpeg"  alt="FramePix HW side" width = 400px></td>
+    <td> <img src="images/framepix-hw3.jpeg"  alt="FramePix HW internal" width = 400px></td>
+   <tr>
+  </td>
+  </tr>
+</table>
 
 ![Web Interface Preview](images/web-interface.png)
 
@@ -76,3 +86,4 @@ There are multiple ideas that can be implemented to make the project even better
   - [ ] Time overlay
   - [ ] Date overlay
 - [ ] Temperature sensor
+- [ ] Auto wifi reconnect to station
