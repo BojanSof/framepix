@@ -88,3 +88,18 @@ There are multiple ideas that can be implemented to make the project even better
 - [ ] Temperature sensor
 - [ ] Auto wifi reconnect to station
 - [x] Improve color matching between web UI and LED matrix
+
+## Gallery
+
+<table>
+  <tr>
+    <td> Source GIF </td>
+    <td> LED matrix </td>
+    <td> Source link </td>
+  </tr>
+  <tr>
+    <td> <img src="images/gallery/sword.gif"  alt="Sword Source GIF" width = 300px></td>
+    <td> <img src="images/gallery/sword-hw.gif"  alt="FramePix Sword animation" width = 300px></td>
+    <td> <a href="https://www.pixilart.com/art/hyperion-v2-sr2c281ba6a8446?ft=tags&ft_id=">Pixilart</a> </td>
+  </tr>
+</table>
