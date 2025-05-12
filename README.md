@@ -87,4 +87,4 @@ There are multiple ideas that can be implemented to make the project even better
   - [ ] Date overlay
 - [ ] Temperature sensor
 - [ ] Auto wifi reconnect to station
-- [ ] Improve color matching between web UI and LED matrix
+- [x] Improve color matching between web UI and LED matrix

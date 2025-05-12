@@ -90,7 +90,7 @@ function applyState(state) {
       if (state[row][col]) {
         // ensure state is in hex format
         const hex = rgba2hex(state[row][col]);
-        cell.dataset.actualColor = rgba2hex(scaleColorForLED(hex));
+        cell.dataset.actualColor = scaleColorForLED(hex);
       } else {
         delete cell.dataset.actualColor;
       }
@@ -216,7 +216,7 @@ function createMatrix() {
 function applyTool(innerDiv) {
   if (currentTool === "painter") {
     const originalHex = colorPicker.value; 
-    const scaledHex = rgba2hex(scaleColorForLED(originalHex));
+    const scaledHex = scaleColorForLED(originalHex);
     const previewHex = originalHex;
     innerDiv.style.backgroundColor = previewHex;
     innerDiv.dataset.actualColor = scaledHex;
@@ -225,7 +225,7 @@ function applyTool(innerDiv) {
     delete innerDiv.dataset.actualColor;
   } else if (currentTool === "bucket") {
     const originalHex = colorPicker.value;
-    const scaledHex = rgba2hex(scaleColorForLED(originalHex));
+    const scaledHex = scaleColorForLED(originalHex);
     const previewHex = originalHex;
 
     const targetColor = innerDiv.dataset.actualColor || "";
@@ -247,32 +247,61 @@ function clearMatrix() {
   renderFrameTimeline();
 }
 
+const rgba2hex = (rgba) => `#${rgba.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(\d+\.{0,1}\d*))?\)$/).slice(1).map((n, i) => (i === 3 ? Math.round(parseFloat(n) * 255) : parseFloat(n)).toString(16).padStart(2, '0').replace('NaN', '')).join('')}`
+
 function scaleColorForLED(hex) {
   // Remove the "#" and parse channels as base-16 numbers.
   let r = parseInt(hex.substring(1, 3), 16);
   let g = parseInt(hex.substring(3, 5), 16);
   let b = parseInt(hex.substring(5, 7), 16);
 
-  // Scale: factor = 50/255
-  const factor = 50 / 255;
-  r = Math.round(r * factor);
-  g = Math.round(g * factor);
-  b = Math.round(b * factor);
+  // 1. Color Correction
+  const r_correction = 240 / 255;
+  const g_correction = 250 / 255;
+  const b_correction = 190 / 255;
+  r = Math.round(r * r_correction);
+  g = Math.round(g * g_correction);
+  b = Math.round(b * b_correction);
 
+  // 2. Gamma correction
+  const gamma = 2.5;
+  r = Math.round(255 * Math.pow(r / 255, gamma));
+  g = Math.round(255 * Math.pow(g / 255, gamma));
+  b = Math.round(255 * Math.pow(b / 255, gamma));
+
+  // 3. Limit max brightness
+  const maxBrightness = 70;
+  const maxChannel = Math.max(r, g, b);
+  if (maxChannel > maxBrightness) {
+    const scale = maxBrightness / maxChannel;
+    r = Math.round(r * scale);
+    g = Math.round(g * scale);
+    b = Math.round(b * scale);
+  }
+  
   const rgbColor = `rgb(${r}, ${g}, ${b})`;
-  return rgbColor;
+  return rgba2hex(rgbColor);
 }
-
-const rgba2hex = (rgba) => `#${rgba.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(\d+\.{0,1}\d*))?\)$/).slice(1).map((n, i) => (i === 3 ? Math.round(parseFloat(n) * 255) : parseFloat(n)).toString(16).padStart(2, '0').replace('NaN', '')).join('')}`
 
 function getMatrixDesign() {
   const design = [];
   for (let row = 0; row < MATRIX_SIZE; row++) {
     for (let col = 0; col < MATRIX_SIZE; col++) {
       const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"] div`);
+      const color = cell.dataset.actualColor || "#000000";
+      design.push(color);
+    }
+  }
+  return design;
+}
+
+function getMatrixDesignPreview() {
+  const design = [];
+  for (let row = 0; row < MATRIX_SIZE; row++) {
+    for (let col = 0; col < MATRIX_SIZE; col++) {
+      const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"] div`);
       const color = rgba2hex(cell.style.backgroundColor || "rgb(0,0,0)");
-      const scaled = rgba2hex(scaleColorForLED(color));
-      design.push(scaled);
+      design.push(color);
     }
   }
   return design;
@@ -313,7 +342,7 @@ function transformImageToLEDMatrix(image) {
       );
       if (cell) {
         cell.style.backgroundColor = hex;
-        cell.dataset.actualColor = rgba2hex(scaleColorForLED(hex));
+        cell.dataset.actualColor = scaleColorForLED(hex);
       }
     }
   }
@@ -335,6 +364,7 @@ function importImage(event) {
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
+  event.target.value = ''; // Reset the input value to allow re-uploading the same file
 }
 
 const CANVAS_SIZE = 512;
@@ -356,7 +386,7 @@ function createCanvasFromMatrix(matrix, canvasSize) {
 }
 
 function exportAsPNG() {
-  const design = getMatrixDesign();
+  const design = getMatrixDesignPreview();
   const matrix = design.map(color => color || "#000000");
   const canvas = createCanvasFromMatrix(matrix, CANVAS_SIZE);
   canvas.toBlob((blob) => {
@@ -392,7 +422,7 @@ function applyAnimation() {
       for (let col = 0; col < MATRIX_SIZE; col++) {
         const rgba = frame2D[row][col] || "rgb(0, 0, 0)";
         const hex = rgba2hex(rgba);
-        const scaled = rgba2hex(scaleColorForLED(hex));
+        const scaled = scaleColorForLED(hex);
         frameFlat.push(scaled);
       }
     }
