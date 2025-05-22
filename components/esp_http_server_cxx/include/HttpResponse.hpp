@@ -24,7 +24,8 @@ public:
         httpd_resp_set_hdr(req_, key, value);
     }
 
-    void setContent(const std::string_view content, const char* contentType)
+    void setContent(
+        const std::string_view content, const std::string_view contentType)
     {
         content_ = content;
         contentType_ = contentType;
@@ -34,7 +35,7 @@ private:
     esp_err_t send()
     {
         esp_err_t err;
-        err = httpd_resp_set_type(req_, contentType_);
+        err = httpd_resp_set_type(req_, contentType_.c_str());
         if (err != ESP_OK)
         {
             return err;
@@ -48,8 +49,8 @@ private:
 
 private:
     httpd_req_t* req_;
-    std::string_view content_{};
-    const char* contentType_{};
+    std::string content_{};
+    std::string contentType_{};
 };
 
 }  // namespace EspHttpServer

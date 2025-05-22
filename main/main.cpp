@@ -17,6 +17,7 @@
 #include "FramepixServer.hpp"
 #include "LedMatrix.hpp"
 #include "MatrixAnimator.hpp"
+#include "StorageManager.hpp"
 
 #include "WifiProvisioningWeb.hpp"
 
@@ -75,8 +76,15 @@ extern "C" void app_main()
         return;
     }
     MatrixAnimator<LedMatrix> animator{ matrix };
+    StorageManager storageManager{ spiffs };
+    if (!storageManager.init())
+    {
+        ESP_LOGE(TAG, "Failed to initialize storage manager");
+        return;
+    }
+
     FramepixServer framepixServer{
-        httpServer, matrix, animator, provisioningWeb
+        httpServer, matrix, animator, provisioningWeb, storageManager
     };
 
     bool provisioningApplied = false;

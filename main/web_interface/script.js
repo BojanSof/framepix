@@ -42,7 +42,7 @@ let animationFrames = [];
 let selectedFrameIndex = 0; // Currently selected frame index in the timeline.
 
 // Flood-fill
-function bucketFill(x, y, targetColor, previewHex, scaledHex) {
+function bucketFill(x, y, targetColor, previewHex) {
   const visited = new Set();
   const queue = [[x, y]];
 
@@ -55,11 +55,10 @@ function bucketFill(x, y, targetColor, previewHex, scaledHex) {
     const div = document.querySelector(`.cell[data-row='${cy}'][data-col='${cx}'] div`);
     if (!div) continue;
 
-    const divColor = div.dataset.actualColor || "";
+    const divColor = div.style.backgroundColor || "";
     if (divColor !== targetColor) continue;
 
     div.style.backgroundColor = previewHex;
-    div.dataset.actualColor = scaledHex;
 
     queue.push([cx + 1, cy]);
     queue.push([cx - 1, cy]);
@@ -86,14 +85,6 @@ function applyState(state) {
     for (let col = 0; col < MATRIX_SIZE; col++) {
       const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"] div`);
       cell.style.backgroundColor = state[row][col];
-      // update actual color
-      if (state[row][col]) {
-        // ensure state is in hex format
-        const hex = rgba2hex(state[row][col]);
-        cell.dataset.actualColor = scaleColorForLED(hex);
-      } else {
-        delete cell.dataset.actualColor;
-      }
     }
   }
   // update animation frames
@@ -215,31 +206,24 @@ function createMatrix() {
 
 function applyTool(innerDiv) {
   if (currentTool === "painter") {
-    const originalHex = colorPicker.value; 
-    const scaledHex = scaleColorForLED(originalHex);
-    const previewHex = originalHex;
-    innerDiv.style.backgroundColor = previewHex;
-    innerDiv.dataset.actualColor = scaledHex;
+    const colorHex = colorPicker.value; 
+    innerDiv.style.backgroundColor = colorHex;
   } else if (currentTool === "eraser") {
     innerDiv.style.backgroundColor = "";
-    delete innerDiv.dataset.actualColor;
   } else if (currentTool === "bucket") {
-    const originalHex = colorPicker.value;
-    const scaledHex = scaleColorForLED(originalHex);
-    const previewHex = originalHex;
+    const colorHex = colorPicker.value;
 
-    const targetColor = innerDiv.dataset.actualColor || "";
+    const targetColor = innerDiv.style.backgroundColor || "";
     const x = parseInt(innerDiv.dataset.x);
     const y = parseInt(innerDiv.dataset.y);
 
-    bucketFill(x, y, targetColor, previewHex, scaledHex);
+    bucketFill(x, y, targetColor, colorHex);
   }
 }
 
 function clearMatrix() {
   document.querySelectorAll('.matrix .cell div').forEach(inner => {
     inner.style.backgroundColor = '';
-    delete inner.dataset.actualColor;
   });
   pushHistory();
   // update animation frames
@@ -288,18 +272,6 @@ function getMatrixDesign() {
   for (let row = 0; row < MATRIX_SIZE; row++) {
     for (let col = 0; col < MATRIX_SIZE; col++) {
       const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"] div`);
-      const color = cell.dataset.actualColor || "#000000";
-      design.push(color);
-    }
-  }
-  return design;
-}
-
-function getMatrixDesignPreview() {
-  const design = [];
-  for (let row = 0; row < MATRIX_SIZE; row++) {
-    for (let col = 0; col < MATRIX_SIZE; col++) {
-      const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"] div`);
       const color = rgba2hex(cell.style.backgroundColor || "rgb(0,0,0)");
       design.push(color);
     }
@@ -342,7 +314,6 @@ function transformImageToLEDMatrix(image) {
       );
       if (cell) {
         cell.style.backgroundColor = hex;
-        cell.dataset.actualColor = scaleColorForLED(hex);
       }
     }
   }
@@ -386,8 +357,7 @@ function createCanvasFromMatrix(matrix, canvasSize) {
 }
 
 function exportAsPNG() {
-  const design = getMatrixDesignPreview();
-  const matrix = design.map(color => color || "#000000");
+  const matrix = getMatrixDesign();
   const canvas = createCanvasFromMatrix(matrix, CANVAS_SIZE);
   canvas.toBlob((blob) => {
     const url = URL.createObjectURL(blob);
@@ -400,7 +370,14 @@ function exportAsPNG() {
 }
 
 function applyDesign() {
-  const design = getMatrixDesign();
+  const design = [];
+  for (let row = 0; row < MATRIX_SIZE; row++) {
+    for (let col = 0; col < MATRIX_SIZE; col++) {
+      const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"] div`);
+      const color = rgba2hex(cell.style.backgroundColor || "rgb(0,0,0)");
+      design.push(scaleColorForLED(color));
+    }
+  }
   console.log("Design:", design);
   fetch('/matrix', {
     method: 'POST',
@@ -422,8 +399,7 @@ function applyAnimation() {
       for (let col = 0; col < MATRIX_SIZE; col++) {
         const rgba = frame2D[row][col] || "rgb(0, 0, 0)";
         const hex = rgba2hex(rgba);
-        const scaled = scaleColorForLED(hex);
-        frameFlat.push(scaled);
+        frameFlat.push(scaleColorForLED(hex));
       }
     }
     return frameFlat;
@@ -630,6 +606,236 @@ exportFramesBtn.addEventListener('click', async () => {
   a.click();
 });
 
+// Gallery functionality
+const designsTab = document.getElementById('designsTab');
+const animationsTab = document.getElementById('animationsTab');
+const designsGallery = document.getElementById('designsGallery');
+const animationsGallery = document.getElementById('animationsGallery');
+const saveDialog = document.getElementById('saveDialog');
+const saveNameInput = document.getElementById('saveNameInput');
+const saveDesignButton = document.getElementById('saveDesignButton');
+const saveAnimationButton = document.getElementById('saveAnimationButton');
+
+let currentSaveType = null;
+
+designsTab.addEventListener('click', () => {
+    designsTab.classList.add('active');
+    animationsTab.classList.remove('active');
+    designsGallery.classList.add('active');
+    animationsGallery.classList.remove('active');
+});
+
+animationsTab.addEventListener('click', () => {
+    animationsTab.classList.add('active');
+    designsTab.classList.remove('active');
+    animationsGallery.classList.add('active');
+    designsGallery.classList.remove('active');
+});
+
+function showSaveDialog(type) {
+    currentSaveType = type;
+    saveDialog.classList.add('active');
+    saveNameInput.value = '';
+    saveNameInput.focus();
+}
+
+function hideSaveDialog() {
+    saveDialog.classList.remove('active');
+    currentSaveType = null;
+}
+
+saveDesignButton.addEventListener('click', () => showSaveDialog('design'));
+saveAnimationButton.addEventListener('click', () => showSaveDialog('animation'));
+
+saveDialog.querySelector('.cancel').addEventListener('click', hideSaveDialog);
+
+saveDialog.querySelector('.save').addEventListener('click', async () => {
+    const name = saveNameInput.value.trim();
+    if (!name) return;
+
+    try {
+        if (currentSaveType === 'design') {
+            const pixels = getMatrixDesign();
+            const response = await fetch('/save-design', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, matrix: pixels })
+            });
+            if (!response.ok) throw new Error('Failed to save design');
+        } else if (currentSaveType === 'animation') {
+            const frames = animationFrames.map(frame => {
+                const framePixels = [];
+                for (let row = 0; row < MATRIX_SIZE; row++) {
+                    for (let col = 0; col < MATRIX_SIZE; col++) {
+                        const rgba = frame[row][col] || "rgb(0, 0, 0)";
+                        const hex = rgba2hex(rgba);
+                        framePixels.push(hex);
+                    }
+                }
+                return framePixels;
+            });
+            const response = await fetch('/save-animation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    name, 
+                    interval_ms: parseInt(intervalInput.value),
+                    frames 
+                })
+            });
+            if (!response.ok) throw new Error('Failed to save animation');
+        }
+        hideSaveDialog();
+        loadGallery();
+    } catch (error) {
+        console.error('Error saving:', error);
+        alert('Failed to save. Please try again.');
+    }
+});
+
+async function loadGallery() {
+    try {
+        const designsResponse = await fetch('/list-designs');
+        const designsData = await designsResponse.json();
+        designsGallery.innerHTML = designsData.designs.map(name => `
+            <div class="gallery-item">
+                <div class="gallery-item-preview" style="display: grid; grid-template-columns: repeat(16, 1fr); gap: 1px;">
+                    <div style="background-color: #000000; width: 100%; height: 100%;"></div>
+                </div>
+                <div class="gallery-item-name">${name}</div>
+                <div class="gallery-item-actions">
+                    <button onclick="loadDesign('${name}')">Load</button>
+                    <button onclick="deleteDesign('${name}')">Delete</button>
+                </div>
+            </div>
+        `).join('');
+
+        const animationsResponse = await fetch('/list-animations');
+        const animationsData = await animationsResponse.json();
+        animationsGallery.innerHTML = animationsData.animations.map(name => `
+            <div class="gallery-item">
+                <div class="gallery-item-preview" style="display: grid; grid-template-columns: repeat(16, 1fr); gap: 1px;">
+                    <div style="background-color: #000000; width: 100%; height: 100%;"></div>
+                </div>
+                <div class="gallery-item-name">${name}</div>
+                <div class="gallery-item-actions">
+                    <button onclick="loadAnimation('${name}')">Load</button>
+                    <button onclick="deleteAnimation('${name}')">Delete</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading gallery:', error);
+    }
+}
+
+async function loadDesign(name) {
+    try {
+        const response = await fetch(`/load-design?name=${encodeURIComponent(name)}`);
+        const design = await response.json();
+        
+        // Convert 1D array to 2D matrix
+        const matrix2D = [];
+        for (let row = 0; row < MATRIX_SIZE; row++) {
+            const rowColors = [];
+            for (let col = 0; col < MATRIX_SIZE; col++) {
+                const color = design.matrix[row * MATRIX_SIZE + col];
+                const hex = color.startsWith('#') ? color : `#${color}`;
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                rowColors.push(`rgb(${r}, ${g}, ${b})`);
+            }
+            matrix2D.push(rowColors);
+        }
+        
+        applyState(matrix2D);
+    } catch (error) {
+        console.error('Error loading design:', error);
+        alert('Failed to load design. Please try again.');
+    }
+}
+
+async function loadAnimation(name) {
+    try {
+        const response = await fetch(`/load-animation?name=${encodeURIComponent(name)}`);
+        const animation = await response.json();
+        animationFrames = animation.frames.map(frame => {
+            const frame2D = [];
+            for (let row = 0; row < MATRIX_SIZE; row++) {
+                const rowColors = [];
+                for (let col = 0; col < MATRIX_SIZE; col++) {
+                    const color = frame[row * MATRIX_SIZE + col];
+                    const hex = color.startsWith('#') ? color : `#${color}`;
+                    const r = parseInt(hex.slice(1, 3), 16);
+                    const g = parseInt(hex.slice(3, 5), 16);
+                    const b = parseInt(hex.slice(5, 7), 16);
+                    rowColors.push(`rgb(${r}, ${g}, ${b})`);
+                }
+                frame2D.push(rowColors);
+            }
+            return frame2D;
+        });
+        intervalInput.value = animation.interval_ms;
+        selectedFrameIndex = 0;
+        applyState(animationFrames[0]);
+        renderFrameTimeline();
+    } catch (error) {
+        console.error('Error loading animation:', error);
+        alert('Failed to load animation. Please try again.');
+    }
+}
+
+async function deleteDesign(name) {
+    if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
+    try {
+        const response = await fetch(`/delete-design?name=${encodeURIComponent(name)}`, { 
+            method: 'DELETE'
+        });
+        if (!response.ok) throw new Error('Failed to delete design');
+        loadGallery();
+    } catch (error) {
+        console.error('Error deleting design:', error);
+        alert('Failed to delete design. Please try again.');
+    }
+}
+
+async function deleteAnimation(name) {
+    if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
+    try {
+        const response = await fetch(`/delete-animation?name=${encodeURIComponent(name)}`, { 
+            method: 'DELETE'
+        });
+        if (!response.ok) throw new Error('Failed to delete animation');
+        loadGallery();
+    } catch (error) {
+        console.error('Error deleting animation:', error);
+        alert('Failed to delete animation. Please try again.');
+    }
+}
+
+// Add this with other button declarations at the top
+const clearStorageBtn = document.getElementById('clearStorageBtn');
+
+// Add this with other event listeners
+clearStorageBtn.addEventListener('click', async () => {
+    if (!confirm('Are you sure you want to clear all designs and animations? This cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/clear-storage', {
+            method: 'POST'
+        });
+        if (!response.ok) throw new Error('Failed to clear storage');
+        alert('Storage cleared successfully');
+        loadGallery(); // Refresh the gallery
+    } catch (error) {
+        console.error('Error clearing storage:', error);
+        alert('Failed to clear storage. Please try again.');
+    }
+});
+
 // Initialization
 createMatrix();
 
@@ -637,3 +843,5 @@ createMatrix();
 animationFrames = [captureState()];
 renderFrameTimeline();
 initHistoryForFrame(0);
+
+loadGallery();

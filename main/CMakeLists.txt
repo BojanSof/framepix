@@ -3,6 +3,7 @@ idf_component_register(
     "main.cpp"
     "WifiProvisioningWeb.cpp"
     "FramepixServer.cpp"
+    "StorageManager.cpp"
   INCLUDE_DIRS ""
   EMBED_FILES
     "web_interface/wifi_login.html"

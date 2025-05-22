@@ -109,6 +109,7 @@ HttpServer::Error HttpServer::start(uint16_t port)
     config_ = HTTPD_DEFAULT_CONFIG();
     config_.server_port = port;
     config_.stack_size = 10240;
+    config_.max_uri_handlers = 20;
 
     esp_err_t err = httpd_start(&server_, &config_);
     running_ = (err == ESP_OK);

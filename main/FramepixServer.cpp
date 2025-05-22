@@ -1,9 +1,9 @@
 #include "FramepixServer.hpp"
-#include "esp_system.h"
 
 #include <cJSON.h>
 
 #include <esp_log.h>
+#include <esp_system.h>
 
 extern const uint8_t designer_html_start[] asm("_binary_designer_html_start");
 extern const uint8_t designer_html_end[] asm("_binary_designer_html_end");
@@ -21,11 +21,13 @@ FramepixServer::FramepixServer(
     HttpServer& httpServer,
     LedMatrix& ledMatrix,
     MatrixAnimator<LedMatrix>& animator,
-    WifiProvisioningWeb& wifiProvisioningWeb)
+    WifiProvisioningWeb& wifiProvisioningWeb,
+    StorageManager& storageManager)
     : httpServer_{ httpServer }
     , ledMatrix_{ ledMatrix }
     , animator_{ animator }
     , wifiProvisioningWeb_{ wifiProvisioningWeb }
+    , storageManager_{ storageManager }
     , framepixPageUri_{ "/",
                         HTTP_GET,
                         [](HttpRequest req) -> HttpResponse
@@ -185,7 +187,6 @@ FramepixServer::FramepixServer(
                                      return response;
                                  }
 
-                                 // 2. Parse JSON
                                  cJSON* root = cJSON_Parse(content.c_str());
                                  if (!root)
                                  {
@@ -196,7 +197,6 @@ FramepixServer::FramepixServer(
                                      return response;
                                  }
 
-                                 // 3. interval_ms
                                  cJSON* intervalItem
                                      = cJSON_GetObjectItem(root, "interval_ms");
                                  if (!cJSON_IsNumber(intervalItem)
@@ -214,7 +214,6 @@ FramepixServer::FramepixServer(
                                  }
                                  int intervalMs = intervalItem->valueint;
 
-                                 // 4. frames array
                                  cJSON* framesItem
                                      = cJSON_GetObjectItem(root, "frames");
                                  if (!cJSON_IsArray(framesItem))
@@ -229,7 +228,6 @@ FramepixServer::FramepixServer(
                                      return response;
                                  }
 
-                                 // Prepare container
                                  using RGB = LedMatrix::RGB;
                                  constexpr size_t N = LedMatrix::numPixels;
                                  std::vector<
@@ -239,7 +237,6 @@ FramepixServer::FramepixServer(
                                  framesVec.reserve(
                                      cJSON_GetArraySize(framesItem));
 
-                                 // 5. Iterate frames
                                  for (int i = 0;
                                       i < cJSON_GetArraySize(framesItem);
                                       ++i)
@@ -300,7 +297,6 @@ FramepixServer::FramepixServer(
                                      (int)framesVec.size(),
                                      intervalMs);
 
-                                 // 6. Start animation
                                  animator_.start(
                                      std::move(framesVec), intervalMs);
 
@@ -309,19 +305,440 @@ FramepixServer::FramepixServer(
                                      "Animation successful", "text/plain");
                                  return response;
                              } }
-    , framepixResetUri_{
-        "/reset",
+    , framepixResetUri_{ "/reset",
+                         HTTP_POST,
+                         [this](HttpRequest req) -> HttpResponse
+                         {
+                             HttpResponse response(req);
+                             wifiProvisioningWeb_.removePreviousProvisioning();
+                             esp_restart();
+                             response.setStatus("200 OK");
+                             response.setContent(
+                                 "Reset successful", "text/plain");
+                             return response;
+                         } }
+    , saveDesignUri_{ "/save-design",
+                      HTTP_POST,
+                      [this](HttpRequest req) -> HttpResponse
+                      {
+                          HttpResponse response(req);
+                          const auto content = req.getContent();
+                          if (content.empty())
+                          {
+                              response.setStatus("400 Bad Request");
+                              response.setContent(
+                                  "Invalid request content", "text/plain");
+                              return response;
+                          }
+
+                          cJSON* root = cJSON_Parse(content.c_str());
+                          if (!root)
+                          {
+                              response.setStatus("400 Bad Request");
+                              response.setContent("Invalid JSON", "text/plain");
+                              return response;
+                          }
+
+                          cJSON* name = cJSON_GetObjectItem(root, "name");
+                          cJSON* matrix = cJSON_GetObjectItem(root, "matrix");
+                          if (!cJSON_IsString(name) || !cJSON_IsArray(matrix)
+                              || cJSON_GetArraySize(matrix)
+                                  != LedMatrix::numPixels)
+                          {
+                              cJSON_Delete(root);
+                              response.setStatus("400 Bad Request");
+                              response.setContent(
+                                  "Invalid request format", "text/plain");
+                              return response;
+                          }
+
+                          StorageManager::Design design;
+                          design.name = name->valuestring;
+                          bool error = false;
+                          for (int i = 0; i < LedMatrix::numPixels; ++i)
+                          {
+                              cJSON* colorItem = cJSON_GetArrayItem(matrix, i);
+                              const char* hex = cJSON_GetStringValue(colorItem);
+                              if (!hex || strlen(hex) != 7 || hex[0] != '#')
+                              {
+                                  error = true;
+                                  break;
+                              }
+
+                              uint8_t r, g, b;
+                              sscanf(hex + 1, "%02hhx%02hhx%02hhx", &r, &g, &b);
+                              design.pixels[i] = { r, g, b };
+                          }
+
+                          cJSON_Delete(root);
+                          if (error)
+                          {
+                              response.setStatus("400 Bad Request");
+                              response.setContent(
+                                  "Invalid color data", "text/plain");
+                              return response;
+                          }
+
+                          if (storageManager_.saveDesign(design))
+                          {
+                              response.setStatus("200 OK");
+                              response.setContent("Design saved", "text/plain");
+                          }
+                          else
+                          {
+                              response.setStatus("500 Internal Server Error");
+                              response.setContent(
+                                  "Failed to save design", "text/plain");
+                          }
+                          return response;
+                      } }
+    , saveAnimationUri_{ "/save-animation",
+                         HTTP_POST,
+                         [this](HttpRequest req) -> HttpResponse
+                         {
+                             HttpResponse response(req);
+                             const auto content = req.getContent();
+                             if (content.empty())
+                             {
+                                 response.setStatus("400 Bad Request");
+                                 response.setContent(
+                                     "Invalid request content", "text/plain");
+                                 return response;
+                             }
+
+                             cJSON* root = cJSON_Parse(content.c_str());
+                             if (!root)
+                             {
+                                 response.setStatus("400 Bad Request");
+                                 response.setContent(
+                                     "Invalid JSON", "text/plain");
+                                 return response;
+                             }
+
+                             cJSON* name = cJSON_GetObjectItem(root, "name");
+                             cJSON* intervalMs
+                                 = cJSON_GetObjectItem(root, "interval_ms");
+                             cJSON* frames
+                                 = cJSON_GetObjectItem(root, "frames");
+                             if (!cJSON_IsString(name)
+                                 || !cJSON_IsNumber(intervalMs)
+                                 || !cJSON_IsArray(frames))
+                             {
+                                 cJSON_Delete(root);
+                                 response.setStatus("400 Bad Request");
+                                 response.setContent(
+                                     "Invalid request format", "text/plain");
+                                 return response;
+                             }
+
+                             StorageManager::Animation animation;
+                             animation.name = name->valuestring;
+                             animation.intervalMs = intervalMs->valueint;
+
+                             for (int i = 0; i < cJSON_GetArraySize(frames);
+                                  ++i)
+                             {
+                                 cJSON* frame = cJSON_GetArrayItem(frames, i);
+                                 if (!cJSON_IsArray(frame)
+                                     || cJSON_GetArraySize(frame)
+                                         != LedMatrix::numPixels)
+                                 {
+                                     cJSON_Delete(root);
+                                     response.setStatus("400 Bad Request");
+                                     response.setContent(
+                                         "Invalid frame data", "text/plain");
+                                     return response;
+                                 }
+
+                                 std::
+                                     array<LedMatrix::RGB, LedMatrix::numPixels>
+                                         framePixels;
+                                 for (int j = 0; j < LedMatrix::numPixels; ++j)
+                                 {
+                                     cJSON* colorItem
+                                         = cJSON_GetArrayItem(frame, j);
+                                     const char* hex
+                                         = cJSON_GetStringValue(colorItem);
+                                     if (!hex || strlen(hex) != 7
+                                         || hex[0] != '#')
+                                     {
+                                         cJSON_Delete(root);
+                                         response.setStatus("400 Bad Request");
+                                         response.setContent(
+                                             "Invalid color data",
+                                             "text/plain");
+                                         return response;
+                                     }
+
+                                     uint8_t r, g, b;
+                                     sscanf(
+                                         hex + 1,
+                                         "%02hhx%02hhx%02hhx",
+                                         &r,
+                                         &g,
+                                         &b);
+                                     framePixels[j] = { r, g, b };
+                                 }
+                                 animation.frames.push_back(framePixels);
+                             }
+
+                             cJSON_Delete(root);
+                             if (animation.frames.empty())
+                             {
+                                 response.setStatus("400 Bad Request");
+                                 response.setContent(
+                                     "No frames data", "text/plain");
+                                 return response;
+                             }
+
+                             if (storageManager_.saveAnimation(animation))
+                             {
+                                 response.setStatus("200 OK");
+                                 response.setContent(
+                                     "Animation saved", "text/plain");
+                             }
+                             else
+                             {
+                                 response.setStatus(
+                                     "500 Internal Server Error");
+                                 response.setContent(
+                                     "Failed to save animation", "text/plain");
+                             }
+                             return response;
+                         } }
+    , listDesignsUri_{ "/list-designs",
+                       HTTP_GET,
+                       [this](HttpRequest req) -> HttpResponse
+                       {
+                           HttpResponse response(req);
+                           auto designs = storageManager_.listDesigns();
+
+                           cJSON* root = cJSON_CreateObject();
+                           cJSON* designsArray = cJSON_CreateArray();
+                           for (const auto& name: designs)
+                           {
+                               cJSON_AddItemToArray(
+                                   designsArray,
+                                   cJSON_CreateString(name.c_str()));
+                           }
+                           cJSON_AddItemToObject(root, "designs", designsArray);
+
+                           char* json = cJSON_PrintUnformatted(root);
+                           response.setStatus("200 OK");
+                           response.setContent(json, "application/json");
+
+                           cJSON_free(json);
+                           cJSON_Delete(root);
+                           return response;
+                       } }
+    , listAnimationsUri_{ "/list-animations",
+                          HTTP_GET,
+                          [this](HttpRequest req) -> HttpResponse
+                          {
+                              HttpResponse response(req);
+                              auto animations
+                                  = storageManager_.listAnimations();
+
+                              cJSON* root = cJSON_CreateObject();
+                              cJSON* animationsArray = cJSON_CreateArray();
+                              for (const auto& name: animations)
+                              {
+                                  cJSON_AddItemToArray(
+                                      animationsArray,
+                                      cJSON_CreateString(name.c_str()));
+                              }
+                              cJSON_AddItemToObject(
+                                  root, "animations", animationsArray);
+
+                              char* json = cJSON_PrintUnformatted(root);
+                              response.setStatus("200 OK");
+                              response.setContent(json, "application/json");
+
+                              cJSON_free(json);
+                              cJSON_Delete(root);
+                              return response;
+                          } }
+    , loadDesignUri_{ "/load-design",
+                      HTTP_GET,
+                      [this](HttpRequest req) -> HttpResponse
+                      {
+                          HttpResponse response(req);
+                          auto name = req.getQueryParam("name");
+                          if (!name)
+                          {
+                              response.setStatus("400 Bad Request");
+                              response.setContent(
+                                  "Missing name parameter", "text/plain");
+                              return response;
+                          }
+
+                          auto design = storageManager_.loadDesign(
+                              std::string{ name.value() });
+                          if (!design)
+                          {
+                              response.setStatus("404 Not Found");
+                              response.setContent(
+                                  "Design not found", "text/plain");
+                              return response;
+                          }
+
+                          cJSON* root = cJSON_CreateObject();
+                          cJSON* matrix = cJSON_CreateArray();
+                          for (const auto& pixel: design->pixels)
+                          {
+                              char hex[8];
+                              snprintf(
+                                  hex,
+                                  sizeof(hex),
+                                  "#%02x%02x%02x",
+                                  pixel.r,
+                                  pixel.g,
+                                  pixel.b);
+                              cJSON_AddItemToArray(
+                                  matrix, cJSON_CreateString(hex));
+                          }
+                          cJSON_AddItemToObject(root, "matrix", matrix);
+
+                          char* json = cJSON_PrintUnformatted(root);
+                          response.setStatus("200 OK");
+                          response.setContent(json, "application/json");
+
+                          cJSON_free(json);
+                          cJSON_Delete(root);
+                          return response;
+                      } }
+    , loadAnimationUri_{ "/load-animation",
+                         HTTP_GET,
+                         [this](HttpRequest req) -> HttpResponse
+                         {
+                             HttpResponse response(req);
+                             auto name = req.getQueryParam("name");
+                             if (!name)
+                             {
+                                 response.setStatus("400 Bad Request");
+                                 response.setContent(
+                                     "Missing name parameter", "text/plain");
+                                 return response;
+                             }
+
+                             auto animation = storageManager_.loadAnimation(
+                                 std::string{ name.value() });
+                             if (!animation)
+                             {
+                                 response.setStatus("404 Not Found");
+                                 response.setContent(
+                                     "Animation not found", "text/plain");
+                                 return response;
+                             }
+
+                             cJSON* root = cJSON_CreateObject();
+                             cJSON_AddNumberToObject(
+                                 root, "interval_ms", animation->intervalMs);
+                             cJSON* frames = cJSON_CreateArray();
+                             for (const auto& frame: animation->frames)
+                             {
+                                 cJSON* frameArray = cJSON_CreateArray();
+                                 for (const auto& pixel: frame)
+                                 {
+                                     char hex[8];
+                                     snprintf(
+                                         hex,
+                                         sizeof(hex),
+                                         "#%02x%02x%02x",
+                                         pixel.r,
+                                         pixel.g,
+                                         pixel.b);
+                                     cJSON_AddItemToArray(
+                                         frameArray, cJSON_CreateString(hex));
+                                 }
+                                 cJSON_AddItemToArray(frames, frameArray);
+                             }
+                             cJSON_AddItemToObject(root, "frames", frames);
+
+                             char* json = cJSON_PrintUnformatted(root);
+                             response.setStatus("200 OK");
+                             response.setContent(json, "application/json");
+
+                             cJSON_free(json);
+                             cJSON_Delete(root);
+                             return response;
+                         } }
+    , deleteDesignUri_{ "/delete-design",
+                        HTTP_DELETE,
+                        [this](HttpRequest req) -> HttpResponse
+                        {
+                            HttpResponse response(req);
+                            auto name = req.getQueryParam("name");
+                            if (!name)
+                            {
+                                response.setStatus("400 Bad Request");
+                                response.setContent(
+                                    "Missing name parameter", "text/plain");
+                                return response;
+                            }
+
+                            if (storageManager_.deleteDesign(
+                                    std::string{ name.value() }))
+                            {
+                                response.setStatus("200 OK");
+                                response.setContent(
+                                    "Design deleted", "text/plain");
+                            }
+                            else
+                            {
+                                response.setStatus("404 Not Found");
+                                response.setContent(
+                                    "Design not found", "text/plain");
+                            }
+                            return response;
+                        } }
+    , deleteAnimationUri_{ "/delete-animation",
+                           HTTP_DELETE,
+                           [this](HttpRequest req) -> HttpResponse
+                           {
+                               HttpResponse response(req);
+                               auto name = req.getQueryParam("name");
+                               if (!name)
+                               {
+                                   response.setStatus("400 Bad Request");
+                                   response.setContent(
+                                       "Missing name parameter", "text/plain");
+                                   return response;
+                               }
+
+                               if (storageManager_.deleteAnimation(
+                                       std::string{ name.value() }))
+                               {
+                                   response.setStatus("200 OK");
+                                   response.setContent(
+                                       "Animation deleted", "text/plain");
+                               }
+                               else
+                               {
+                                   response.setStatus("404 Not Found");
+                                   response.setContent(
+                                       "Animation not found", "text/plain");
+                               }
+                               return response;
+                           } }
+    , clearStorageUri_{
+        "/clear-storage",
         HTTP_POST,
-        [&wifiProvisioningWeb](HttpRequest req) -> HttpResponse
+        [this](HttpRequest req) -> HttpResponse
         {
             HttpResponse response(req);
-            wifiProvisioningWeb.removePreviousProvisioning();
-            esp_restart();
-            response.setStatus("200 OK");
-            response.setContent("Reset successful", "text/plain");
+            if (storageManager_.clearStorage())
+            {
+                response.setStatus("200 OK");
+                response.setContent("Storage cleared", "text/plain");
+            }
+            else
+            {
+                response.setStatus("500 Internal Server Error");
+                response.setContent("Failed to clear storage", "text/plain");
+            }
             return response;
         }
-
     }
 {
 }
@@ -336,6 +753,18 @@ void FramepixServer::start()
     httpServer_.registerUri(framepixMatrixUri_);
     httpServer_.registerUri(framepixAnimationUri_);
     httpServer_.registerUri(framepixResetUri_);
+
+    // Register new storage endpoints
+    httpServer_.registerUri(saveDesignUri_);
+    httpServer_.registerUri(saveAnimationUri_);
+    httpServer_.registerUri(listDesignsUri_);
+    httpServer_.registerUri(listAnimationsUri_);
+    httpServer_.registerUri(loadDesignUri_);
+    httpServer_.registerUri(loadAnimationUri_);
+    httpServer_.registerUri(deleteDesignUri_);
+    httpServer_.registerUri(deleteAnimationUri_);
+    httpServer_.registerUri(clearStorageUri_);
+
     ESP_LOGI(TAG, "Framepix server started");
 }
 

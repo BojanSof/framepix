@@ -11,6 +11,7 @@
   <!-- Dark/Light toggle button positioned at the top right -->
   <button id="themeToggleBtn" class="theme-toggle btn-blue">Toggle Dark Theme</button>
   <button id="resetBtn" class="btn-blue">Reset</button>
+  <button id="clearStorageBtn" class="btn btn-danger">Clear Storage</button>
   
   <div class="designer-container">
     <header>
@@ -49,6 +50,7 @@
       <button id="importImageBtn" onclick="document.getElementById('importImage').click()" class="btn-blue">Import Image</button>
       <button id="exportImageBtn" class="btn-blue">Export Image</button>
       <button id="applyImageBtn" class="btn-blue">Apply</button>
+      <button id="saveDesignButton" class="btn-blue">Save Design</button>
     </section>
     
     <!-- The main LED matrix grid -->
@@ -76,7 +78,33 @@
       <input type="file" id="importFrames" multiple accept="image/*" style="display: none;">
       <button onclick="document.getElementById('importFrames').click()" class="btn-blue">Import Frames</button>
       <button id="exportFramesBtn" class="btn-blue">Export Frames</button>
+      <button id="saveAnimationButton" class="btn-blue">Save Animation</button>
     </section>
+
+    <!-- Gallery Section -->
+    <section class="gallery-section">
+      <h2>Gallery</h2>
+      <div class="gallery-tabs">
+        <button id="designsTab" class="tab-button active">Designs</button>
+        <button id="animationsTab" class="tab-button">Animations</button>
+      </div>
+      <div class="gallery-content">
+        <div id="designsGallery" class="gallery active"></div>
+        <div id="animationsGallery" class="gallery"></div>
+      </div>
+    </section>
+
+    <!-- Save Dialog -->
+    <div id="saveDialog" class="dialog">
+      <div class="dialog-content">
+        <h3>Save</h3>
+        <input type="text" id="saveNameInput" placeholder="Enter name">
+        <div class="dialog-buttons">
+          <button class="save">Save</button>
+          <button class="cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
   </div>
   <script src="jszip.min.js"></script>
   <script src="script.js"></script>

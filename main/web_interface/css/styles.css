@@ -277,3 +277,321 @@ body.dark .wifi-form input[type="password"] {
   }
 }
 
+/* Base styles */
+body {
+  margin: 0;
+  padding: 20px;
+  background-color: #f0f0f0;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Designer section */
+.designer-section {
+  margin-bottom: 30px;
+}
+
+.matrix-container {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.matrix {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 1px;
+  background-color: #ddd;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.pixel {
+  width: 20px;
+  height: 20px;
+  background-color: #000;
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+
+.pixel:hover {
+  opacity: 0.8;
+}
+
+/* Controls */
+.controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.animation-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 20px 0;
+}
+
+.frames-container {
+  margin-top: 20px;
+}
+
+.frames {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 10px 0;
+}
+
+.frame {
+  flex: 0 0 auto;
+  width: 100px;
+  height: 100px;
+  background-color: #ddd;
+  border: 2px solid #999;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.frame.active {
+  border-color: #007bff;
+}
+
+/* Buttons */
+button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  background-color: #007bff;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+/* Inputs */
+input[type="color"] {
+  width: 50px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+input[type="number"] {
+  width: 80px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+/* Gallery Section */
+.gallery-section {
+  margin-top: 30px;
+  padding: 20px;
+  background: #f4f4f4;
+  color: #333;
+  border-radius: 8px;
+  transition: background 0.3s, color 0.3s;
+}
+
+body.dark .gallery-section {
+  background: #333;
+  color: #eee;
+}
+
+.gallery-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.tab-button {
+  padding: 10px 20px;
+  background-color: #e9ecef;
+  color: #495057;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+body.dark .tab-button {
+  background-color: #444;
+  color: #ddd;
+}
+
+.tab-button:hover {
+  background-color: #dee2e6;
+  color: #212529;
+}
+
+body.dark .tab-button:hover {
+  background-color: #555;
+  color: #fff;
+}
+
+.tab-button.active {
+  background-color: #007bff;
+  color: white;
+}
+
+body.dark .tab-button.active {
+  background-color: #007bff;
+  color: white;
+}
+
+.gallery {
+  display: none;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px;
+  padding: 20px 0;
+}
+
+.gallery.active {
+  display: grid;
+}
+
+.gallery-item {
+  background-color: white;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: background-color 0.3s, box-shadow 0.3s;
+}
+
+body.dark .gallery-item {
+  background-color: #444;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.gallery-item-preview {
+  width: 100%;
+  height: 150px;
+  background-color: #ddd;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  transition: background-color 0.3s;
+}
+
+body.dark .gallery-item-preview {
+  background-color: #555;
+}
+
+.gallery-item-name {
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.gallery-item-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.gallery-item-actions button {
+  flex: 1;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+/* Dialog */
+.dialog {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  justify-content: center;
+  align-items: center;
+  transition: background-color 0.3s;
+}
+
+.dialog.active {
+  display: flex;
+}
+
+.dialog-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  min-width: 300px;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+body.dark .dialog-content {
+  background-color: #333;
+  color: #eee;
+}
+
+.dialog-content h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+}
+
+.dialog-content input {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 15px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  color: #333;
+  transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+}
+
+body.dark .dialog-content input {
+  background-color: #444;
+  color: #eee;
+  border-color: #555;
+}
+
+.dialog-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.dialog-buttons button {
+  min-width: 80px;
+}
+
+.dialog-buttons .cancel {
+  background-color: #6c757d;
+}
+
+.dialog-buttons .cancel:hover {
+  background-color: #5a6268;
+}
+
+.btn-danger {
+  padding: 10px 20px;
+  background-color: #dc3545;
+  border: none;
+  color: white;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.3s;
+}
+
+.btn-danger:hover {
+  background-color: #c82333;
+} 

@@ -3,6 +3,7 @@
 
 #include <esp_http_server.h>
 
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -23,7 +24,7 @@ public:
 
     std::string_view getUri() const { return std::string_view{ req_->uri }; }
 
-    std::string getHeader(const char* key) const
+    std::optional<std::string> getHeader(const char* key) const
     {
         const uint16_t bufLen = httpd_req_get_hdr_value_len(req_, key);
         if (bufLen > 0)
@@ -35,7 +36,36 @@ public:
                 return value;
             }
         }
-        return std::string{ "" };
+        return std::nullopt;
+    }
+
+    std::optional<std::string> getQueryParam(const char* key) const
+    {
+        std::string_view uri = getUri();
+        size_t queryStart = uri.find('?');
+        if (queryStart == std::string_view::npos)
+        {
+            return std::nullopt;
+        }
+
+        std::string_view query = uri.substr(queryStart + 1);
+        std::string keyStr = std::string(key) + "=";
+        size_t paramStart = query.find(keyStr);
+
+        if (paramStart == std::string_view::npos)
+        {
+            return std::nullopt;
+        }
+
+        size_t valueStart = paramStart + keyStr.length();
+        size_t valueEnd = query.find('&', valueStart);
+
+        if (valueEnd == std::string_view::npos)
+        {
+            return std::string(query.substr(valueStart));
+        }
+
+        return std::string(query.substr(valueStart, valueEnd - valueStart));
     }
 
     std::string getContent()
