@@ -698,9 +698,9 @@ async function loadGallery() {
         const designsResponse = await fetch('/list-designs');
         const designsData = await designsResponse.json();
         designsGallery.innerHTML = designsData.designs.map(name => `
-            <div class="gallery-item">
-                <div class="gallery-item-preview" style="display: grid; grid-template-columns: repeat(16, 1fr); gap: 1px;">
-                    <div style="background-color: #000000; width: 100%; height: 100%;"></div>
+            <div class="gallery-item" data-name="${name}">
+                <div class="gallery-item-preview">
+                    <canvas width="64" height="64" style="width: 100%; height: 100%;"></canvas>
                 </div>
                 <div class="gallery-item-name">${name}</div>
                 <div class="gallery-item-actions">
@@ -710,12 +710,34 @@ async function loadGallery() {
             </div>
         `).join('');
 
+        // Load and render design previews
+        for (const name of designsData.designs) {
+            try {
+                const response = await fetch(`/load-design?name=${encodeURIComponent(name)}`);
+                const design = await response.json();
+                const canvas = designsGallery.querySelector(`[data-name="${name}"] canvas`);
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    const cellSize = canvas.width / MATRIX_SIZE;
+                    for (let row = 0; row < MATRIX_SIZE; row++) {
+                        for (let col = 0; col < MATRIX_SIZE; col++) {
+                            const color = design.matrix[row * MATRIX_SIZE + col];
+                            ctx.fillStyle = color;
+                            ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error(`Error loading design preview for ${name}:`, error);
+            }
+        }
+
         const animationsResponse = await fetch('/list-animations');
         const animationsData = await animationsResponse.json();
         animationsGallery.innerHTML = animationsData.animations.map(name => `
-            <div class="gallery-item">
-                <div class="gallery-item-preview" style="display: grid; grid-template-columns: repeat(16, 1fr); gap: 1px;">
-                    <div style="background-color: #000000; width: 100%; height: 100%;"></div>
+            <div class="gallery-item" data-name="${name}">
+                <div class="gallery-item-preview">
+                    <canvas width="64" height="64" style="width: 100%; height: 100%;"></canvas>
                 </div>
                 <div class="gallery-item-name">${name}</div>
                 <div class="gallery-item-actions">
@@ -724,6 +746,29 @@ async function loadGallery() {
                 </div>
             </div>
         `).join('');
+
+        // Load and render animation previews (first frame only)
+        for (const name of animationsData.animations) {
+            try {
+                const response = await fetch(`/load-animation?name=${encodeURIComponent(name)}`);
+                const animation = await response.json();
+                const canvas = animationsGallery.querySelector(`[data-name="${name}"] canvas`);
+                if (canvas && animation.frames.length > 0) {
+                    const ctx = canvas.getContext('2d');
+                    const cellSize = canvas.width / MATRIX_SIZE;
+                    const firstFrame = animation.frames[0];
+                    for (let row = 0; row < MATRIX_SIZE; row++) {
+                        for (let col = 0; col < MATRIX_SIZE; col++) {
+                            const color = firstFrame[row * MATRIX_SIZE + col];
+                            ctx.fillStyle = color;
+                            ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error(`Error loading animation preview for ${name}:`, error);
+            }
+        }
     } catch (error) {
         console.error('Error loading gallery:', error);
     }

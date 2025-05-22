@@ -99,8 +99,8 @@ private:
     deserializeAnimation(const std::vector<uint8_t>& data);
     bool writeBinaryToFile(
         const std::string& filename, const std::vector<uint8_t>& data);
-    std::optional<std::vector<uint8_t>>
-    readBinaryFromFile(const std::string& filename);
+    std::optional<std::vector<uint8_t>> readBinaryFromFile(
+        const std::string& filename, const size_t readBufferSize = 10240);
 
     static constexpr const char* designsIndexFile = "/designs_index.json";
     static constexpr const char* animationsIndexFile = "/animations_index.json";

@@ -306,11 +306,11 @@ bool StorageManager::writeBinaryToFile(
     return result.has_value();
 }
 
-std::optional<std::vector<uint8_t>>
-StorageManager::readBinaryFromFile(const std::string& filename)
+std::optional<std::vector<uint8_t>> StorageManager::readBinaryFromFile(
+    const std::string& filename, const size_t readBufferSize)
 {
     ESP_LOGI(TAG, "Reading binary data from file: %s", filename.c_str());
-    std::vector<std::byte> buffer(10240);  // Adjust size as needed
+    std::vector<std::byte> buffer(readBufferSize);
     auto result = spiffs_.read(filename, buffer);
     if (!result)
     {
@@ -349,7 +349,7 @@ StorageManager::loadDesign(const std::string& name)
     if (it == entries.end())
         return std::nullopt;
 
-    auto data = readBinaryFromFile(it->second.filename);
+    auto data = readBinaryFromFile(it->second.filename, it->second.size);
     if (!data)
         return std::nullopt;
 
@@ -420,7 +420,7 @@ StorageManager::loadAnimation(const std::string& name)
     if (it == entries.end())
         return std::nullopt;
 
-    auto data = readBinaryFromFile(it->second.filename);
+    auto data = readBinaryFromFile(it->second.filename, it->second.size);
     if (!data)
         return std::nullopt;
 
@@ -510,7 +510,7 @@ std::optional<std::string> StorageManager::readJsonFromFile(
 {
     ESP_LOGI(TAG, "Reading JSON from file: %s", filename.c_str());
 
-    std::vector<std::byte> buffer(10240);
+    std::vector<std::byte> buffer(readBufferSize);
     auto result = spiffs_.read(filename, buffer);
     if (!result)
     {

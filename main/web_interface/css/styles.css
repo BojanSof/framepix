@@ -489,10 +489,21 @@ body.dark .gallery-item {
   border-radius: 4px;
   margin-bottom: 10px;
   transition: background-color 0.3s;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
 }
 
 body.dark .gallery-item-preview {
   background-color: #555;
+}
+
+.gallery-item-preview canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
 }
 
 .gallery-item-name {
