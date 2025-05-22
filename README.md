@@ -80,7 +80,7 @@ Key components are located in the `components` directory.
 
 There are multiple ideas that can be implemented to make the project even better:
 
-- [ ] Persistent storage of designs and animations
+- [x] Persistent storage of designs and animations
 - [ ] Gallery of designs and animations
 - [ ] LED matrix overlays
   - [ ] Time overlay
