@@ -68,12 +68,12 @@ bool StorageManager::initIndexFile(const std::string& filename)
 
 std::string StorageManager::getDesignFilename(const std::string& name)
 {
-    return "/" + std::string(designPrefix) + name + ".json";
+    return "/" + std::string(designPrefix) + name + ".bin";
 }
 
 std::string StorageManager::getAnimationFilename(const std::string& name)
 {
-    return "/" + std::string(animationPrefix) + name + ".json";
+    return "/" + std::string(animationPrefix) + name + ".bin";
 }
 
 bool StorageManager::updateIndexFile(
@@ -163,32 +163,177 @@ StorageManager::readIndexFile(const std::string& filename)
     return entries;
 }
 
+std::vector<uint8_t> StorageManager::serializeDesign(const Design& design)
+{
+    std::vector<uint8_t> data(sizeof(BinaryDesign));
+    BinaryDesign* binary = reinterpret_cast<BinaryDesign*>(data.data());
+
+    binary->magic = BinaryDesign::MAGIC;
+    binary->version = BinaryDesign::VERSION;
+    binary->nameLength = std::min(design.name.length(), size_t(31));
+    strncpy(binary->name, design.name.c_str(), 31);
+    binary->name[31] = '\0';
+
+    // Copy RGB values directly
+    for (size_t i = 0; i < LedMatrix::numPixels; i++)
+    {
+        binary->pixels[i * 3] = design.pixels[i].r;
+        binary->pixels[i * 3 + 1] = design.pixels[i].g;
+        binary->pixels[i * 3 + 2] = design.pixels[i].b;
+    }
+
+    return data;
+}
+
+std::optional<StorageManager::Design>
+StorageManager::deserializeDesign(const std::vector<uint8_t>& data)
+{
+    if (data.size() != sizeof(BinaryDesign))
+    {
+        ESP_LOGE(TAG, "Invalid design data size");
+        return std::nullopt;
+    }
+
+    const BinaryDesign* binary
+        = reinterpret_cast<const BinaryDesign*>(data.data());
+    if (binary->magic != BinaryDesign::MAGIC
+        || binary->version != BinaryDesign::VERSION)
+    {
+        ESP_LOGE(TAG, "Invalid design format");
+        return std::nullopt;
+    }
+
+    Design design;
+    design.name = std::string(binary->name, binary->nameLength);
+
+    // Copy RGB values directly
+    for (size_t i = 0; i < LedMatrix::numPixels; i++)
+    {
+        design.pixels[i] = { binary->pixels[i * 3],
+                             binary->pixels[i * 3 + 1],
+                             binary->pixels[i * 3 + 2] };
+    }
+
+    return design;
+}
+
+std::vector<uint8_t>
+StorageManager::serializeAnimation(const Animation& animation)
+{
+    size_t frameDataSize = LedMatrix::numPixels * 3 * animation.frames.size();
+    std::vector<uint8_t> data(sizeof(BinaryAnimation) + frameDataSize);
+    BinaryAnimation* binary = reinterpret_cast<BinaryAnimation*>(data.data());
+
+    binary->magic = BinaryAnimation::MAGIC;
+    binary->version = BinaryAnimation::VERSION;
+    binary->nameLength = std::min(animation.name.length(), size_t(31));
+    strncpy(binary->name, animation.name.c_str(), 31);
+    binary->name[31] = '\0';
+    binary->intervalMs = animation.intervalMs;
+    binary->numFrames = animation.frames.size();
+
+    // Copy frame data
+    uint8_t* frameData = binary->frames;
+    for (const auto& frame: animation.frames)
+    {
+        for (size_t i = 0; i < LedMatrix::numPixels; i++)
+        {
+            frameData[i * 3] = frame[i].r;
+            frameData[i * 3 + 1] = frame[i].g;
+            frameData[i * 3 + 2] = frame[i].b;
+        }
+        frameData += LedMatrix::numPixels * 3;
+    }
+
+    return data;
+}
+
+std::optional<StorageManager::Animation>
+StorageManager::deserializeAnimation(const std::vector<uint8_t>& data)
+{
+    if (data.size() < sizeof(BinaryAnimation))
+    {
+        ESP_LOGE(TAG, "Invalid animation data size");
+        return std::nullopt;
+    }
+
+    const BinaryAnimation* binary
+        = reinterpret_cast<const BinaryAnimation*>(data.data());
+    if (binary->magic != BinaryAnimation::MAGIC
+        || binary->version != BinaryAnimation::VERSION)
+    {
+        ESP_LOGE(TAG, "Invalid animation format");
+        return std::nullopt;
+    }
+
+    size_t expectedSize = sizeof(BinaryAnimation)
+        + (binary->numFrames * LedMatrix::numPixels * 3);
+    if (data.size() != expectedSize)
+    {
+        ESP_LOGE(TAG, "Invalid animation data size");
+        return std::nullopt;
+    }
+
+    Animation animation;
+    animation.name = std::string(binary->name, binary->nameLength);
+    animation.intervalMs = binary->intervalMs;
+
+    const uint8_t* frameData = binary->frames;
+    for (uint16_t f = 0; f < binary->numFrames; f++)
+    {
+        std::array<LedMatrix::RGB, LedMatrix::numPixels> frame;
+        for (size_t i = 0; i < LedMatrix::numPixels; i++)
+        {
+            frame[i] = { frameData[i * 3],
+                         frameData[i * 3 + 1],
+                         frameData[i * 3 + 2] };
+        }
+        animation.frames.push_back(frame);
+        frameData += LedMatrix::numPixels * 3;
+    }
+
+    return animation;
+}
+
+bool StorageManager::writeBinaryToFile(
+    const std::string& filename, const std::vector<uint8_t>& data)
+{
+    ESP_LOGI(TAG, "Writing binary data to file: %s", filename.c_str());
+    std::span<const std::byte> dataSpan{
+        reinterpret_cast<const std::byte*>(data.data()), data.size()
+    };
+    auto result = spiffs_.write(filename, dataSpan);
+    return result.has_value();
+}
+
+std::optional<std::vector<uint8_t>>
+StorageManager::readBinaryFromFile(const std::string& filename)
+{
+    ESP_LOGI(TAG, "Reading binary data from file: %s", filename.c_str());
+    std::vector<std::byte> buffer(10240);  // Adjust size as needed
+    auto result = spiffs_.read(filename, buffer);
+    if (!result)
+    {
+        ESP_LOGE(TAG, "Failed to read file: %s", filename.c_str());
+        return std::nullopt;
+    }
+    return std::vector<uint8_t>(
+        reinterpret_cast<uint8_t*>(buffer.data()),
+        reinterpret_cast<uint8_t*>(buffer.data()) + *result);
+}
+
 bool StorageManager::saveDesign(const Design& design)
 {
     ESP_LOGI(TAG, "Saving design: %s", design.name.c_str());
 
-    // Create design JSON
-    cJSON* root = cJSON_CreateObject();
-    cJSON* pixels = cJSON_CreateArray();
-    for (const auto& pixel: design.pixels)
-    {
-        char hex[8];
-        snprintf(hex, sizeof(hex), "#%02x%02x%02x", pixel.r, pixel.g, pixel.b);
-        cJSON_AddItemToArray(pixels, cJSON_CreateString(hex));
-    }
-    cJSON_AddItemToObject(root, "pixels", pixels);
-
-    char* json = cJSON_PrintUnformatted(root);
+    auto data = serializeDesign(design);
     std::string filename = getDesignFilename(design.name);
-    bool result = writeJsonToFile(filename, json);
-    cJSON_free(json);
-    cJSON_Delete(root);
+    bool result = writeBinaryToFile(filename, data);
 
     if (result)
     {
-        // Update index file
         result = updateIndexFile(
-            designsIndexFile, design.name, filename, strlen(json));
+            designsIndexFile, design.name, filename, data.size());
     }
 
     return result;
@@ -204,45 +349,11 @@ StorageManager::loadDesign(const std::string& name)
     if (it == entries.end())
         return std::nullopt;
 
-    auto json = readJsonFromFile(it->second.filename, it->second.size);
-    if (!json)
+    auto data = readBinaryFromFile(it->second.filename);
+    if (!data)
         return std::nullopt;
 
-    cJSON* root = cJSON_Parse(json->c_str());
-    if (!root)
-        return std::nullopt;
-
-    cJSON* pixels = cJSON_GetObjectItem(root, "pixels");
-    if (!cJSON_IsArray(pixels)
-        || cJSON_GetArraySize(pixels) != LedMatrix::numPixels)
-    {
-        cJSON_Delete(root);
-        return std::nullopt;
-    }
-
-    Design result;
-    result.name = name;
-    for (int i = 0; i < LedMatrix::numPixels; i++)
-    {
-        cJSON* pixel = cJSON_GetArrayItem(pixels, i);
-        if (!cJSON_IsString(pixel))
-        {
-            cJSON_Delete(root);
-            return std::nullopt;
-        }
-        const char* hex = pixel->valuestring;
-        if (strlen(hex) != 7 || hex[0] != '#')
-        {
-            cJSON_Delete(root);
-            return std::nullopt;
-        }
-        uint8_t r, g, b;
-        sscanf(hex + 1, "%02hhx%02hhx%02hhx", &r, &g, &b);
-        result.pixels[i] = { r, g, b };
-    }
-
-    cJSON_Delete(root);
-    return result;
+    return deserializeDesign(*data);
 }
 
 bool StorageManager::deleteDesign(const std::string& name)
@@ -286,36 +397,14 @@ bool StorageManager::saveAnimation(const Animation& animation)
 {
     ESP_LOGI(TAG, "Saving animation: %s", animation.name.c_str());
 
-    // Create animation JSON
-    cJSON* root = cJSON_CreateObject();
-    cJSON_AddNumberToObject(root, "interval_ms", animation.intervalMs);
-
-    cJSON* frames = cJSON_CreateArray();
-    for (const auto& frame: animation.frames)
-    {
-        cJSON* frameArray = cJSON_CreateArray();
-        for (const auto& pixel: frame)
-        {
-            char hex[8];
-            snprintf(
-                hex, sizeof(hex), "#%02x%02x%02x", pixel.r, pixel.g, pixel.b);
-            cJSON_AddItemToArray(frameArray, cJSON_CreateString(hex));
-        }
-        cJSON_AddItemToArray(frames, frameArray);
-    }
-    cJSON_AddItemToObject(root, "frames", frames);
-
-    char* json = cJSON_PrintUnformatted(root);
+    auto data = serializeAnimation(animation);
     std::string filename = getAnimationFilename(animation.name);
-    bool result = writeJsonToFile(filename, json);
-    cJSON_free(json);
-    cJSON_Delete(root);
+    bool result = writeBinaryToFile(filename, data);
 
     if (result)
     {
-        // Update index file
         result = updateIndexFile(
-            animationsIndexFile, animation.name, filename, strlen(json));
+            animationsIndexFile, animation.name, filename, data.size());
     }
 
     return result;
@@ -331,60 +420,11 @@ StorageManager::loadAnimation(const std::string& name)
     if (it == entries.end())
         return std::nullopt;
 
-    auto json = readJsonFromFile(it->second.filename, it->second.size);
-    if (!json)
+    auto data = readBinaryFromFile(it->second.filename);
+    if (!data)
         return std::nullopt;
 
-    cJSON* root = cJSON_Parse(json->c_str());
-    if (!root)
-        return std::nullopt;
-
-    cJSON* intervalMs = cJSON_GetObjectItem(root, "interval_ms");
-    cJSON* frames = cJSON_GetObjectItem(root, "frames");
-    if (!cJSON_IsNumber(intervalMs) || !cJSON_IsArray(frames))
-    {
-        cJSON_Delete(root);
-        return std::nullopt;
-    }
-
-    Animation result;
-    result.name = name;
-    result.intervalMs = intervalMs->valueint;
-
-    for (int i = 0; i < cJSON_GetArraySize(frames); i++)
-    {
-        cJSON* frame = cJSON_GetArrayItem(frames, i);
-        if (!cJSON_IsArray(frame)
-            || cJSON_GetArraySize(frame) != LedMatrix::numPixels)
-        {
-            cJSON_Delete(root);
-            return std::nullopt;
-        }
-
-        std::array<LedMatrix::RGB, LedMatrix::numPixels> framePixels;
-        for (int j = 0; j < LedMatrix::numPixels; j++)
-        {
-            cJSON* pixel = cJSON_GetArrayItem(frame, j);
-            if (!cJSON_IsString(pixel))
-            {
-                cJSON_Delete(root);
-                return std::nullopt;
-            }
-            const char* hex = pixel->valuestring;
-            if (strlen(hex) != 7 || hex[0] != '#')
-            {
-                cJSON_Delete(root);
-                return std::nullopt;
-            }
-            uint8_t r, g, b;
-            sscanf(hex + 1, "%02hhx%02hhx%02hhx", &r, &g, &b);
-            framePixels[j] = { r, g, b };
-        }
-        result.frames.push_back(framePixels);
-    }
-
-    cJSON_Delete(root);
-    return result;
+    return deserializeAnimation(*data);
 }
 
 bool StorageManager::deleteAnimation(const std::string& name)

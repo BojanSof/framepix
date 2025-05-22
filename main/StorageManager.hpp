@@ -4,6 +4,7 @@
 #include "LedMatrix.hpp"
 #include "Spiffs.hpp"
 
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
@@ -13,6 +14,31 @@ class StorageManager
 {
 private:
     static constexpr const char* TAG = "StorageManager";
+
+    // Binary format structures
+    struct BinaryDesign
+    {
+        static constexpr uint8_t MAGIC = 0x44;  // 'D'
+        static constexpr uint8_t VERSION = 1;
+        uint8_t magic;
+        uint8_t version;
+        uint8_t nameLength;
+        char name[32];  // Fixed size for name
+        uint8_t pixels[LedMatrix::numPixels * 3];  // RGB values
+    };
+
+    struct BinaryAnimation
+    {
+        static constexpr uint8_t MAGIC = 0x41;  // 'A'
+        static constexpr uint8_t VERSION = 1;
+        uint8_t magic;
+        uint8_t version;
+        uint8_t nameLength;
+        char name[32];  // Fixed size for name
+        uint32_t intervalMs;
+        uint16_t numFrames;
+        uint8_t frames[];  // Flexible array member for frame data
+    };
 
 public:
     struct Design
@@ -49,9 +75,12 @@ public:
     bool clearStorage();
 
 private:
+    bool initIndexFile(const std::string& filename);
+    bool writeJsonToFile(const std::string& filename, const std::string& json);
+    std::optional<std::string> readJsonFromFile(
+        const std::string& filename, const size_t readBufferSize = 10240);
     std::string getDesignFilename(const std::string& name);
     std::string getAnimationFilename(const std::string& name);
-    bool initIndexFile(const std::string& filename);
     bool updateIndexFile(
         const std::string& indexFile,
         const std::string& name,
@@ -62,9 +91,16 @@ private:
     std::map<std::string, StorageEntry>
     readIndexFile(const std::string& filename);
 
-    bool writeJsonToFile(const std::string& filename, const std::string& json);
-    std::optional<std::string> readJsonFromFile(
-        const std::string& filename, const size_t readBufferSize = 10240);
+    // Binary format helpers
+    std::vector<uint8_t> serializeDesign(const Design& design);
+    std::optional<Design> deserializeDesign(const std::vector<uint8_t>& data);
+    std::vector<uint8_t> serializeAnimation(const Animation& animation);
+    std::optional<Animation>
+    deserializeAnimation(const std::vector<uint8_t>& data);
+    bool writeBinaryToFile(
+        const std::string& filename, const std::vector<uint8_t>& data);
+    std::optional<std::vector<uint8_t>>
+    readBinaryFromFile(const std::string& filename);
 
     static constexpr const char* designsIndexFile = "/designs_index.json";
     static constexpr const char* animationsIndexFile = "/animations_index.json";
