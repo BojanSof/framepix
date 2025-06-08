@@ -168,7 +168,6 @@ FramepixServer::FramepixServer(
                               ledMatrix_.update();
                               response.setStatus("200 OK");
                               response.setContent("OK", "text/plain");
-
                               return response;
                           } }
     , framepixAnimationUri_{ "/animation",
@@ -381,6 +380,8 @@ FramepixServer::FramepixServer(
 
                           if (storageManager_.saveDesign(design))
                           {
+                              // Save as last used design
+                              storageManager_.saveLastUsed(design.name, false);
                               response.setStatus("200 OK");
                               response.setContent("Design saved", "text/plain");
                           }
@@ -493,6 +494,8 @@ FramepixServer::FramepixServer(
 
                              if (storageManager_.saveAnimation(animation))
                              {
+                                 // Save as last used animation
+                                 storageManager_.saveLastUsed(animation.name, true);
                                  response.setStatus("200 OK");
                                  response.setContent(
                                      "Animation saved", "text/plain");
@@ -740,6 +743,34 @@ FramepixServer::FramepixServer(
             return response;
         }
     }
+    , loadLastUsedUri_{
+        "/load-last-used",
+        HTTP_GET,
+        [this](HttpRequest req) -> HttpResponse
+        {
+            HttpResponse response(req);
+            auto lastUsed = storageManager_.loadLastUsed();
+            if (!lastUsed)
+            {
+                response.setStatus("404 Not Found");
+                response.setContent("No last used design/animation", "text/plain");
+                return response;
+            }
+
+            const auto& [name, isAnimation] = *lastUsed;
+            cJSON* root = cJSON_CreateObject();
+            cJSON_AddStringToObject(root, "name", name.c_str());
+            cJSON_AddBoolToObject(root, "isAnimation", isAnimation);
+
+            char* json = cJSON_PrintUnformatted(root);
+            response.setStatus("200 OK");
+            response.setContent(json, "application/json");
+
+            cJSON_free(json);
+            cJSON_Delete(root);
+            return response;
+        }
+    }
 {
 }
 
@@ -764,6 +795,32 @@ void FramepixServer::start()
     httpServer_.registerUri(deleteDesignUri_);
     httpServer_.registerUri(deleteAnimationUri_);
     httpServer_.registerUri(clearStorageUri_);
+    httpServer_.registerUri(loadLastUsedUri_);
+
+    // Load last used design/animation
+    auto lastUsed = storageManager_.loadLastUsed();
+    if (lastUsed)
+    {
+        const auto& [name, isAnimation] = *lastUsed;
+        if (isAnimation)
+        {
+            auto animation = storageManager_.loadAnimation(name);
+            if (animation)
+            {
+                animator_.start(std::move(animation->frames), animation->intervalMs);
+            }
+        }
+        else
+        {
+            auto design = storageManager_.loadDesign(name);
+            if (design)
+            {
+                animator_.stop();
+                ledMatrix_.setAllPixels(design->pixels);
+                ledMatrix_.update();
+            }
+        }
+    }
 
     ESP_LOGI(TAG, "Framepix server started");
 }

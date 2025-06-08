@@ -233,40 +233,6 @@ function clearMatrix() {
 
 const rgba2hex = (rgba) => `#${rgba.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(\d+\.{0,1}\d*))?\)$/).slice(1).map((n, i) => (i === 3 ? Math.round(parseFloat(n) * 255) : parseFloat(n)).toString(16).padStart(2, '0').replace('NaN', '')).join('')}`
 
-function scaleColorForLED(hex) {
-  // Remove the "#" and parse channels as base-16 numbers.
-  let r = parseInt(hex.substring(1, 3), 16);
-  let g = parseInt(hex.substring(3, 5), 16);
-  let b = parseInt(hex.substring(5, 7), 16);
-
-  // 1. Color Correction
-  const r_correction = 240 / 255;
-  const g_correction = 250 / 255;
-  const b_correction = 190 / 255;
-  r = Math.round(r * r_correction);
-  g = Math.round(g * g_correction);
-  b = Math.round(b * b_correction);
-
-  // 2. Gamma correction
-  const gamma = 2.5;
-  r = Math.round(255 * Math.pow(r / 255, gamma));
-  g = Math.round(255 * Math.pow(g / 255, gamma));
-  b = Math.round(255 * Math.pow(b / 255, gamma));
-
-  // 3. Limit max brightness
-  const maxBrightness = 70;
-  const maxChannel = Math.max(r, g, b);
-  if (maxChannel > maxBrightness) {
-    const scale = maxBrightness / maxChannel;
-    r = Math.round(r * scale);
-    g = Math.round(g * scale);
-    b = Math.round(b * scale);
-  }
-  
-  const rgbColor = `rgb(${r}, ${g}, ${b})`;
-  return rgba2hex(rgbColor);
-}
-
 function getMatrixDesign() {
   const design = [];
   for (let row = 0; row < MATRIX_SIZE; row++) {
@@ -375,7 +341,7 @@ function applyDesign() {
     for (let col = 0; col < MATRIX_SIZE; col++) {
       const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"] div`);
       const color = rgba2hex(cell.style.backgroundColor || "rgb(0,0,0)");
-      design.push(scaleColorForLED(color));
+      design.push(color);
     }
   }
   console.log("Design:", design);
@@ -392,20 +358,20 @@ function applyAnimation() {
   // Update the current frame with the latest grid state
   animationFrames[selectedFrameIndex] = captureState();
 
-  // Convert a 2D state into a 1D LED-scaled hex array
+  // Convert a 2D state into a 1D hex array
   function processFrame(frame2D) {
     const frameFlat = [];
     for (let row = 0; row < MATRIX_SIZE; row++) {
       for (let col = 0; col < MATRIX_SIZE; col++) {
         const rgba = frame2D[row][col] || "rgb(0, 0, 0)";
         const hex = rgba2hex(rgba);
-        frameFlat.push(scaleColorForLED(hex));
+        frameFlat.push(hex);
       }
     }
     return frameFlat;
   }
 
-  // Process all frames into 1D LED-scaled arrays
+  // Process all frames into 1D hex arrays
   const processedFrames = animationFrames.map(processFrame);
 
   // Prepare the payload
@@ -889,4 +855,22 @@ animationFrames = [captureState()];
 renderFrameTimeline();
 initHistoryForFrame(0);
 
+// Load the last used design/animation
+async function loadLastUsed() {
+    try {
+        const response = await fetch('/load-last-used');
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        if (data.isAnimation) {
+            await loadAnimation(data.name);
+        } else {
+            await loadDesign(data.name);
+        }
+    } catch (error) {
+        console.error('Error loading last used:', error);
+    }
+}
+
 loadGallery();
+loadLastUsed();

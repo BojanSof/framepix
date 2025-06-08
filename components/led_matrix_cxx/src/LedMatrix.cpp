@@ -100,10 +100,11 @@ void WS2812Matrix<Width, Height, Serpentine, Rotation, MirrorX, MirrorY>::
 {
     if (x < Width && y < Height)
     {
+        auto scaledColor = color.scaleAndGammaCorrect();
         auto idx = 3 * index(x, y);
-        pixels_[idx + 0] = color.g;
-        pixels_[idx + 1] = color.r;
-        pixels_[idx + 2] = color.b;
+        pixels_[idx + 0] = scaledColor.g;
+        pixels_[idx + 1] = scaledColor.r;
+        pixels_[idx + 2] = scaledColor.b;
     }
 }
 
@@ -123,9 +124,10 @@ void WS2812Matrix<Width, Height, Serpentine, Rotation, MirrorX, MirrorY>::
         {
             size_t li = y * Width + x;
             size_t idx = 3 * index(x, y);
-            pixels_[idx + 0] = pixels[li].g;
-            pixels_[idx + 1] = pixels[li].r;
-            pixels_[idx + 2] = pixels[li].b;
+            auto scaledColor = pixels[li].scaleAndGammaCorrect();
+            pixels_[idx + 0] = scaledColor.g;
+            pixels_[idx + 1] = scaledColor.r;
+            pixels_[idx + 2] = scaledColor.b;
         }
     }
 }
@@ -140,11 +142,12 @@ template<
 void WS2812Matrix<Width, Height, Serpentine, Rotation, MirrorX, MirrorY>::fill(
     RGB color)
 {
+    auto scaledColor = color.scaleAndGammaCorrect();
     for (size_t i = 0; i < numPixels; ++i)
     {
-        pixels_[3 * i + 0] = color.g;
-        pixels_[3 * i + 1] = color.r;
-        pixels_[3 * i + 2] = color.b;
+        pixels_[3 * i + 0] = scaledColor.g;
+        pixels_[3 * i + 1] = scaledColor.r;
+        pixels_[3 * i + 2] = scaledColor.b;
     }
 }
 

@@ -365,6 +365,13 @@ bool StorageManager::deleteDesign(const std::string& name)
     if (it == entries.end())
         return false;
 
+    // Check if this was the last used design
+    auto lastUsed = loadLastUsed();
+    if (lastUsed && !lastUsed->second && lastUsed->first == name) {
+        // This was the last used design, clear the last used state
+        spiffs_.remove(lastUsedFile);
+    }
+
     // Delete the design file
     if (!spiffs_.remove(it->second.filename).has_value())
     {
@@ -436,6 +443,13 @@ bool StorageManager::deleteAnimation(const std::string& name)
     if (it == entries.end())
         return false;
 
+    // Check if this was the last used animation
+    auto lastUsed = loadLastUsed();
+    if (lastUsed && lastUsed->second && lastUsed->first == name) {
+        // This was the last used animation, clear the last used state
+        spiffs_.remove(lastUsedFile);
+    }
+
     // Delete the animation file
     if (!spiffs_.remove(it->second.filename).has_value())
     {
@@ -490,8 +504,60 @@ bool StorageManager::clearStorage()
         }
     }
 
+    // Delete last used file
+    spiffs_.remove(lastUsedFile);
+
     // Reinitialize storage
     return init();
+}
+
+bool StorageManager::saveLastUsed(const std::string& name, bool isAnimation)
+{
+    ESP_LOGI(TAG, "Saving last used: %s (isAnimation: %d)", name.c_str(), isAnimation);
+
+    cJSON* root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "name", name.c_str());
+    cJSON_AddBoolToObject(root, "isAnimation", isAnimation);
+
+    char* json = cJSON_PrintUnformatted(root);
+    bool result = writeJsonToFile(lastUsedFile, json);
+    cJSON_free(json);
+    cJSON_Delete(root);
+
+    return result;
+}
+
+std::optional<std::pair<std::string, bool>> StorageManager::loadLastUsed()
+{
+    ESP_LOGI(TAG, "Loading last used");
+
+    auto json = readJsonFromFile(lastUsedFile);
+    if (!json)
+    {
+        ESP_LOGI(TAG, "No last used file found");
+        return std::nullopt;
+    }
+
+    cJSON* root = cJSON_Parse(json->c_str());
+    if (!root)
+    {
+        ESP_LOGE(TAG, "Invalid JSON in last used file");
+        return std::nullopt;
+    }
+
+    cJSON* name = cJSON_GetObjectItem(root, "name");
+    cJSON* isAnimation = cJSON_GetObjectItem(root, "isAnimation");
+
+    if (!cJSON_IsString(name) || !cJSON_IsBool(isAnimation))
+    {
+        ESP_LOGE(TAG, "Invalid last used format");
+        cJSON_Delete(root);
+        return std::nullopt;
+    }
+
+    auto result = std::make_pair(std::string(name->valuestring), isAnimation->valueint != 0);
+    cJSON_Delete(root);
+    return result;
 }
 
 bool StorageManager::writeJsonToFile(

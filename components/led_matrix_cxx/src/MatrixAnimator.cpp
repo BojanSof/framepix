@@ -24,7 +24,7 @@ template<typename MatrixT> MatrixAnimator<MatrixT>::~MatrixAnimator()
 
 template<typename MatrixT>
 void MatrixAnimator<MatrixT>::start(
-    std::vector<std::array<RGB, N>, VectorAllocator>&& frames,
+    Vector&& frames,
     uint32_t interval)
 {
     xSemaphoreTake(lock_, portMAX_DELAY);

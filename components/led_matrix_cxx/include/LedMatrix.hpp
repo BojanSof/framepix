@@ -1,7 +1,10 @@
 #ifndef LED_MATRIX_HPP
 #define LED_MATRIX_HPP
 
+#include <algorithm>
 #include <array>
+#include <cmath>
+
 #include <driver/rmt_tx.h>
 #include <esp_log.h>
 
@@ -36,6 +39,40 @@ public:
     struct RGB
     {
         uint8_t r, g, b;
+
+        RGB scaleAndGammaCorrect() const {
+            // Color correction factors
+            constexpr float r_correction = 240.0f / 255.0f;
+            constexpr float g_correction = 250.0f / 255.0f;
+            constexpr float b_correction = 190.0f / 255.0f;
+
+            // Apply color correction
+            float rc = r * r_correction;
+            float gc = g * g_correction;
+            float bc = b * b_correction;
+
+            // Gamma correction
+            constexpr float gamma = 2.5f;
+            rc = 255.0f * std::pow(rc / 255.0f, gamma);
+            gc = 255.0f * std::pow(gc / 255.0f, gamma);
+            bc = 255.0f * std::pow(bc / 255.0f, gamma);
+
+            // Limit maximum brightness
+            constexpr uint8_t maxBrightness = 70;
+            float maxChannel = std::max({rc, gc, bc});
+            if (maxChannel > maxBrightness) {
+                float scale = maxBrightness / maxChannel;
+                rc *= scale;
+                gc *= scale;
+                bc *= scale;
+            }
+
+            return {
+                static_cast<uint8_t>(std::round(rc)),
+                static_cast<uint8_t>(std::round(gc)),
+                static_cast<uint8_t>(std::round(bc))
+            };
+        }
     };
 
     explicit WS2812Matrix(gpio_num_t gpio);

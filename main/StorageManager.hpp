@@ -2,6 +2,7 @@
 #define STORAGE_MANAGER_HPP
 
 #include "LedMatrix.hpp"
+#include "PSRAMallocator.hpp"
 #include "Spiffs.hpp"
 
 #include <cstdint>
@@ -14,6 +15,7 @@ class StorageManager
 {
 private:
     static constexpr const char* TAG = "StorageManager";
+    using VectorAllocator = PSRAMAllocator<std::array<LedMatrix::RGB, LedMatrix::numPixels>>;
 
     // Binary format structures
     struct BinaryDesign
@@ -51,7 +53,7 @@ public:
     {
         std::string name;
         int intervalMs;
-        std::vector<std::array<LedMatrix::RGB, LedMatrix::numPixels>> frames;
+        std::vector<std::array<LedMatrix::RGB, LedMatrix::numPixels>, VectorAllocator> frames;
     };
 
     struct StorageEntry
@@ -73,6 +75,9 @@ public:
     bool deleteAnimation(const std::string& name);
     std::vector<std::string> listAnimations();
     bool clearStorage();
+
+    bool saveLastUsed(const std::string& name, bool isAnimation);
+    std::optional<std::pair<std::string, bool>> loadLastUsed();
 
 private:
     bool initIndexFile(const std::string& filename);
@@ -106,6 +111,7 @@ private:
     static constexpr const char* animationsIndexFile = "/animations_index.json";
     static constexpr const char* designPrefix = "design_";
     static constexpr const char* animationPrefix = "anim_";
+    static constexpr const char* lastUsedFile = "/last_used.json";
 
     Spiffs& spiffs_;
 };
