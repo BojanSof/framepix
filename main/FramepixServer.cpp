@@ -305,7 +305,7 @@ FramepixServer::FramepixServer(
                                      "Animation successful", "text/plain");
                                  return response;
                              } }
-    , framepixResetUri_{ "/reset",
+    , framepixWifiChangeUri_{ "/wifi-change",
                          HTTP_POST,
                          [this](HttpRequest req) -> HttpResponse
                          {
@@ -314,7 +314,7 @@ FramepixServer::FramepixServer(
                              esp_restart();
                              response.setStatus("200 OK");
                              response.setContent(
-                                 "Reset successful", "text/plain");
+                                 "WiFi change initiated successfully", "text/plain");
                              return response;
                          } }
     , saveDesignUri_{ "/save-design",
@@ -752,7 +752,7 @@ void FramepixServer::start()
     httpServer_.registerUri(jszipUri_);
     httpServer_.registerUri(framepixMatrixUri_);
     httpServer_.registerUri(framepixAnimationUri_);
-    httpServer_.registerUri(framepixResetUri_);
+    httpServer_.registerUri(framepixWifiChangeUri_);
 
     // Register new storage endpoints
     httpServer_.registerUri(saveDesignUri_);

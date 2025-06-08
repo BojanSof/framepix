@@ -1,5 +1,5 @@
 const MATRIX_SIZE = 16;
-const resetBtn = document.getElementById('resetBtn');
+const wifiChangeBtn = document.getElementById('wifiChangeBtn');
 const matrixEl = document.getElementById('matrix');
 const colorPicker = document.getElementById('colorPicker');
 const clearBtn = document.getElementById('clearBtn');
@@ -143,11 +143,11 @@ document.getElementById("bucketTool").addEventListener("click", () => {
   document.getElementById('painterTool').classList.remove('selected');
 });
 
-resetBtn.addEventListener('click', () => {
-  fetch('/reset', {
+wifiChangeBtn.addEventListener('click', () => {
+  fetch('wifi-change', {
     method: 'POST'
   })
-  .then(res => res.ok ? console.log("Reset initiated") : console.error("Reset failed"))
+  .then(res => res.ok ? console.log("WiFi change initiated") : console.error("WiFi change failed"))
   .catch(console.error);
 });
 

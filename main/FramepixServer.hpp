@@ -36,7 +36,7 @@ private:
     HttpUri jszipUri_;
     HttpUri framepixMatrixUri_;
     HttpUri framepixAnimationUri_;
-    HttpUri framepixResetUri_;
+    HttpUri framepixWifiChangeUri_;
 
     HttpUri saveDesignUri_;
     HttpUri saveAnimationUri_;
