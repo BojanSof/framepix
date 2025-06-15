@@ -771,6 +771,53 @@ FramepixServer::FramepixServer(
             return response;
         }
     }
+    , setLastUsedUri_{
+        "/set-last-used",
+        HTTP_POST,
+        [this](HttpRequest req) -> HttpResponse
+        {
+            HttpResponse response(req);
+            const auto content = req.getContent();
+            if (content.empty())
+            {
+                response.setStatus("400 Bad Request");
+                response.setContent("Invalid request content", "text/plain");
+                return response;
+            }
+
+            cJSON* root = cJSON_Parse(content.c_str());
+            if (!root)
+            {
+                response.setStatus("400 Bad Request");
+                response.setContent("Invalid JSON", "text/plain");
+                return response;
+            }
+
+            cJSON* name = cJSON_GetObjectItem(root, "name");
+            cJSON* isAnimation = cJSON_GetObjectItem(root, "isAnimation");
+            if (!cJSON_IsString(name) || !cJSON_IsBool(isAnimation))
+            {
+                cJSON_Delete(root);
+                response.setStatus("400 Bad Request");
+                response.setContent("Invalid request format", "text/plain");
+                return response;
+            }
+
+            if (storageManager_.saveLastUsed(name->valuestring, isAnimation->valueint != 0))
+            {
+                response.setStatus("200 OK");
+                response.setContent("Last used item set", "text/plain");
+            }
+            else
+            {
+                response.setStatus("500 Internal Server Error");
+                response.setContent("Failed to set last used item", "text/plain");
+            }
+
+            cJSON_Delete(root);
+            return response;
+        }
+    }
 {
 }
 
@@ -796,6 +843,7 @@ void FramepixServer::start()
     httpServer_.registerUri(deleteAnimationUri_);
     httpServer_.registerUri(clearStorageUri_);
     httpServer_.registerUri(loadLastUsedUri_);
+    httpServer_.registerUri(setLastUsedUri_);
 
     // Load last used design/animation
     auto lastUsed = storageManager_.loadLastUsed();

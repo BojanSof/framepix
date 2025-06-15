@@ -661,10 +661,14 @@ saveDialog.querySelector('.save').addEventListener('click', async () => {
 
 async function loadGallery() {
     try {
+        // Get last used item
+        const lastUsedResponse = await fetch('/load-last-used');
+        const lastUsedData = lastUsedResponse.ok ? await lastUsedResponse.json() : null;
+
         const designsResponse = await fetch('/list-designs');
         const designsData = await designsResponse.json();
         designsGallery.innerHTML = designsData.designs.map(name => `
-            <div class="gallery-item" data-name="${name}">
+            <div class="gallery-item ${lastUsedData && !lastUsedData.isAnimation && lastUsedData.name === name ? 'last-used' : ''}" data-name="${name}">
                 <div class="gallery-item-preview">
                     <canvas width="64" height="64" style="width: 100%; height: 100%;"></canvas>
                 </div>
@@ -672,6 +676,7 @@ async function loadGallery() {
                 <div class="gallery-item-actions">
                     <button onclick="loadDesign('${name}')">Load</button>
                     <button onclick="deleteDesign('${name}')">Delete</button>
+                    <button onclick="setLastUsed('${name}', false)" class="set-default-btn">Set as Default</button>
                 </div>
             </div>
         `).join('');
@@ -701,7 +706,7 @@ async function loadGallery() {
         const animationsResponse = await fetch('/list-animations');
         const animationsData = await animationsResponse.json();
         animationsGallery.innerHTML = animationsData.animations.map(name => `
-            <div class="gallery-item" data-name="${name}">
+            <div class="gallery-item ${lastUsedData && lastUsedData.isAnimation && lastUsedData.name === name ? 'last-used' : ''}" data-name="${name}">
                 <div class="gallery-item-preview">
                     <canvas width="64" height="64" style="width: 100%; height: 100%;"></canvas>
                 </div>
@@ -709,6 +714,7 @@ async function loadGallery() {
                 <div class="gallery-item-actions">
                     <button onclick="loadAnimation('${name}')">Load</button>
                     <button onclick="deleteAnimation('${name}')">Delete</button>
+                    <button onclick="setLastUsed('${name}', true)" class="set-default-btn">Set as Default</button>
                 </div>
             </div>
         `).join('');
@@ -874,3 +880,18 @@ async function loadLastUsed() {
 
 loadGallery();
 loadLastUsed();
+
+async function setLastUsed(name, isAnimation) {
+    try {
+        const response = await fetch('/set-last-used', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, isAnimation })
+        });
+        if (!response.ok) throw new Error('Failed to set last used item');
+        loadGallery(); // Refresh gallery to update UI
+    } catch (error) {
+        console.error('Error setting last used item:', error);
+        alert('Failed to set as default. Please try again.');
+    }
+}

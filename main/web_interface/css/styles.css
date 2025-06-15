@@ -475,11 +475,29 @@ body.dark .tab-button.active {
   padding: 15px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transition: background-color 0.3s, box-shadow 0.3s;
+  position: relative;
 }
 
 body.dark .gallery-item {
   background-color: #444;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.gallery-item.last-used {
+  border: 2px solid #007bff;
+}
+
+.gallery-item.last-used::after {
+  content: "Default";
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background-color: #007bff;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: bold;
 }
 
 .gallery-item-preview {
@@ -514,12 +532,22 @@ body.dark .gallery-item-preview {
 .gallery-item-actions {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .gallery-item-actions button {
   flex: 1;
   padding: 6px 12px;
   font-size: 14px;
+  min-width: 80px;
+}
+
+.gallery-item-actions .set-default-btn {
+  background-color: #28a745;
+}
+
+.gallery-item-actions .set-default-btn:hover {
+  background-color: #218838;
 }
 
 /* Dialog */

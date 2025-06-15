@@ -48,6 +48,7 @@ private:
     HttpUri deleteAnimationUri_;
     HttpUri clearStorageUri_;
     HttpUri loadLastUsedUri_;
+    HttpUri setLastUsedUri_;
 };
 
 #endif  // FRAMEPIX_SERVER_HPP
